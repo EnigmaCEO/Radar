@@ -50,6 +50,7 @@ const config: Config = {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+        gold: "hsl(var(--gold))",
         radar: {
           watch: "hsl(var(--radar-watch))",
           warning: "hsl(var(--radar-warning))",

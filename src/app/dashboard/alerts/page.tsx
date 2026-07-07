@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { listAlerts } from "@/lib/api";
 import type { RadarAlert, RadarSeverity, RadarMonitorType } from "@/lib/api-types";
+import { sortAlertsBySeverityAndCreatedAt } from "@/lib/alert-feed";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +19,12 @@ function SeverityBadge({ severity }: { severity: RadarSeverity }) {
 function MonitorTypeBadge({ type }: { type: RadarMonitorType }) {
   return <Badge variant="secondary" className="font-mono text-xs">{type}</Badge>;
 }
+
+const SEVERITY_CARD_CLASSES: Record<RadarSeverity, string> = {
+  critical: "border-l-4 border-l-red-500 bg-red-50/50 dark:bg-red-950/20 border-y-border/60 border-r-border/60",
+  warning: "border-l-4 border-l-orange-500 bg-orange-50/40 dark:bg-orange-950/10 border-y-border/60 border-r-border/60",
+  watch: "border-l-4 border-l-yellow-500 border-y-border/60 border-r-border/60",
+};
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<RadarAlert[]>([]);
@@ -35,7 +42,7 @@ export default function AlertsPage() {
         monitorType: monitorType || undefined,
         limit: 100,
       });
-      setAlerts(data);
+      setAlerts(sortAlertsBySeverityAndCreatedAt(data));
     } catch (e) {
       console.error(e);
     } finally {
@@ -117,7 +124,7 @@ export default function AlertsPage() {
       ) : (
         <div className="space-y-2">
           {alerts.map((alert) => (
-            <Card key={alert.id} className="border-border/60">
+            <Card key={alert.id} className={SEVERITY_CARD_CLASSES[alert.severity]}>
               <CardContent className="py-4 px-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0 flex-1">

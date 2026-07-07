@@ -1,69 +1,67 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { db } from "@/lib/db";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-});
-
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" });
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+
+const STATUS_MAP: Record<string, string> = {
+  active: "active",
+  trialing: "trial",
+  past_due: "past_due",
+  canceled: "canceled",
+};
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
   const signature = request.headers.get("stripe-signature");
-
-  if (!signature) {
-    return NextResponse.json({ error: "Missing stripe-signature header" }, { status: 400 });
-  }
+  if (!signature) return NextResponse.json({ error: "Missing signature" }, { status: 400 });
 
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-  } catch (err) {
-    console.error("Stripe webhook signature verification failed:", err);
+  } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "https://continuityengineserver.fly.dev";
-  const adminKey = process.env.SCE_ADMIN_API_KEY ?? "";
-
   try {
     switch (event.type) {
+      // Link the Stripe customer to the account on first checkout
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.mode !== "subscription") break;
+
+        const accountId = session.metadata?.accountId;
+        const auth0Sub = session.metadata?.auth0_sub;
+        const customerId = session.customer as string;
+        if (!accountId || !customerId) break;
+
+        // Link customer to account
+        await db.radarAccount.update({
+          where: { id: accountId },
+          data: { stripeCustomerId: customerId },
+        });
+
+        // Stamp Auth0 identity onto the Stripe customer for support lookups
+        if (auth0Sub) {
+          await stripe.customers.update(customerId, {
+            metadata: { auth0_sub: auth0Sub },
+          });
+        }
+        break;
+      }
+
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
-        const plan = sub.metadata?.plan ?? "radar_live";
         const customerId = sub.customer as string;
-        const status: string =
-          sub.status === "active"
-            ? "active"
-            : sub.status === "trialing"
-            ? "trial"
-            : sub.status === "past_due"
-            ? "past_due"
-            : sub.status === "canceled"
-            ? "canceled"
-            : "suspended";
+        const plan = (sub.metadata?.plan as string) ?? "radar_live";
+        const status = STATUS_MAP[sub.status] ?? "suspended";
 
-        // Find the client by externalBillingCustomerId and update plan + status
-        const listRes = await fetch(
-          `${apiBase}/v1/sce/radar/clients?limit=500`,
-          { headers: { "X-SCE-Admin-Key": adminKey } },
-        );
-        if (listRes.ok) {
-          const clients: Array<{ id: string; externalBillingCustomerId?: string }> =
-            await listRes.json();
-          const client = clients.find((c) => c.externalBillingCustomerId === customerId);
-          if (client) {
-            await fetch(`${apiBase}/v1/sce/radar/clients/${client.id}`, {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                "X-SCE-Admin-Key": adminKey,
-              },
-              body: JSON.stringify({ plan, status }),
-            });
-          }
-        }
+        await db.radarAccount.updateMany({
+          where: { stripeCustomerId: customerId },
+          data: { plan, status, stripeSubId: sub.id },
+        });
         break;
       }
 
@@ -71,33 +69,15 @@ export async function POST(request: NextRequest) {
         const sub = event.data.object as Stripe.Subscription;
         const customerId = sub.customer as string;
 
-        const listRes = await fetch(
-          `${apiBase}/v1/sce/radar/clients?limit=500`,
-          { headers: { "X-SCE-Admin-Key": adminKey } },
-        );
-        if (listRes.ok) {
-          const clients: Array<{ id: string; externalBillingCustomerId?: string }> =
-            await listRes.json();
-          const client = clients.find((c) => c.externalBillingCustomerId === customerId);
-          if (client) {
-            await fetch(`${apiBase}/v1/sce/radar/clients/${client.id}`, {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                "X-SCE-Admin-Key": adminKey,
-              },
-              body: JSON.stringify({ plan: "free", status: "canceled" }),
-            });
-          }
-        }
+        await db.radarAccount.updateMany({
+          where: { stripeCustomerId: customerId },
+          data: { plan: "free", status: "canceled", stripeSubId: null },
+        });
         break;
       }
-
-      default:
-        break;
     }
   } catch (err) {
-    console.error(`Error handling Stripe event ${event.type}:`, err);
+    console.error(`Stripe webhook error [${event.type}]:`, err);
   }
 
   return NextResponse.json({ received: true });

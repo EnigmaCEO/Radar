@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity } from "lucide-react";
+import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,24 +14,45 @@ const navLinks = [
 
 export function Nav() {
   const pathname = usePathname();
-  const isDashboard = pathname.startsWith("/dashboard");
+  const isMarketing = !pathname.startsWith("/dashboard");
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header
+      className={cn(
+        "sticky top-0 z-50 border-b",
+        isMarketing
+          ? "border-white/10 bg-[#07060f]/90 backdrop-blur"
+          : "border-border bg-background/95 backdrop-blur",
+      )}
+    >
       <div className="container mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
-          <Activity className="h-5 w-5 text-primary" />
-          <span>Radar</span>
-          <span className="text-xs text-muted-foreground font-normal">by Sagitta</span>
+        <Link href="/" className="flex items-center gap-2.5">
+          <Logo size={28} />
+          <span
+            className={cn(
+              "font-bold tracking-wide",
+              isMarketing ? "text-white" : "text-foreground",
+            )}
+          >
+            Radar
+          </span>
+          <span
+            className={cn(
+              "text-xs font-normal",
+              isMarketing ? "text-purple-400/70" : "text-muted-foreground",
+            )}
+          >
+            by Sagitta Labs
+          </span>
         </Link>
 
-        {!isDashboard && (
+        {isMarketing && (
           <nav className="hidden md:flex items-center gap-6 text-sm">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-muted-foreground transition-colors hover:text-foreground"
+                className="text-slate-300 transition-colors hover:text-white"
               >
                 {link.label}
               </Link>
@@ -40,14 +61,23 @@ export function Nav() {
         )}
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
-          {!isDashboard && (
+          <ThemeToggle className={isMarketing ? "text-slate-300 hover:text-white hover:bg-white/10" : ""} />
+          {isMarketing && (
             <>
-              <Button variant="ghost" size="sm" asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-slate-300 hover:text-white hover:bg-white/10"
+                asChild
+              >
                 <Link href="/login">Sign in</Link>
               </Button>
-              <Button size="sm" asChild>
-                <Link href="/request-access">Request access</Link>
+              <Button
+                size="sm"
+                className="bg-violet-600 hover:bg-violet-700 text-white"
+                asChild
+              >
+                <Link href="/auth/login?screen_hint=signup">Get started free</Link>
               </Button>
             </>
           )}
@@ -55,10 +85,6 @@ export function Nav() {
       </div>
     </header>
   );
-}
-
-interface DashboardNavProps {
-  clientId?: string;
 }
 
 const dashboardLinks = [
@@ -69,20 +95,20 @@ const dashboardLinks = [
   { href: "/dashboard/settings", label: "Settings" },
 ];
 
-export function DashboardNav({ clientId: _clientId }: DashboardNavProps) {
+export function DashboardNav() {
   const pathname = usePathname();
   return (
-    <aside className="w-56 shrink-0 hidden md:block">
-      <nav className="flex flex-col gap-1 py-4">
+    <aside className="w-56 shrink-0 hidden md:block border-r border-border">
+      <nav className="flex flex-col gap-1 p-3 pt-4">
         {dashboardLinks.map((link) => (
           <Link
             key={link.href}
             href={link.href}
             className={cn(
-              "rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
+              "rounded-md px-3 py-2 text-sm transition-colors",
               pathname === link.href
-                ? "bg-accent text-accent-foreground font-medium"
-                : "text-muted-foreground",
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
             )}
           >
             {link.label}

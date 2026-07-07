@@ -9,13 +9,24 @@
 # next.js
 /.next/
 /out/
+.next-dev
+.next-prod
 
 # production
 /build
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
+*.code-workspace
+*.swp
+*.swo
+
+# editor / local tooling
+.vscode/
+.idea/
+.mcp.json
 
 # debug
 npm-debug.log*
@@ -32,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Auth0 credentials
+.env.local

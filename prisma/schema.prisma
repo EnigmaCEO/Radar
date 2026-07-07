@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Radar accounts ────────────────────────────────────────────────────────────
+// One account per Auth0 user (ownerSub). Bootstrapped on first login.
+
+model RadarAccount {
+  id               String   @id @default(cuid())
+  ownerSub         String   @unique          // Auth0 subject identifier
+  name             String   @default("")
+  plan             String   @default("free") // free | radar_live | radar_pro | managed
+  status           String   @default("trial") // trial | active | past_due | suspended | canceled
+  stripeCustomerId String?  @unique
+  stripeSubId      String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  watchlists           RadarWatchlist[]
+  deliveryDestinations RadarDeliveryDestination[]
+  deliveryLogs         RadarDeliveryLog[]
+
+  @@map("radar_accounts")
+}
+
+// ── Watchlists ────────────────────────────────────────────────────────────────
+// Radar owns watchlist rules only. SCE owns the monitorable object catalog —
+// these filters match against catalog objects (and later, alert ledger events).
+
+model RadarWatchlist {
+  id          String  @id @default(cuid())
+  accountId   String
+  name        String
+  description String?
+  enabled     Boolean @default(true)
+
+  matchMode   String @default("any") // any | all
+  minSeverity String @default("watch") // watch | warning | critical
+
+  signalClasses Json @default("[]") // alert | warning | watch | coverage
+  monitorTypes  Json @default("[]") // oracle | bridge | lp
+  providers     Json @default("[]")
+  chains        Json @default("[]")
+  assets        Json @default("[]")
+  objectIds     Json @default("[]") // specific SCE catalog object ids
+  tags          Json @default("[]")
+  purposes      Json @default("[]")
+  statuses      Json @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account RadarAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("radar_watchlists")
+}
+
+// ── Delivery destinations ─────────────────────────────────────────────────────
+
+model RadarDeliveryDestination {
+  id               String    @id @default(cuid())
+  accountId        String
+  name             String
+  channel          String    // discord_webhook | telegram_bot | webhook | x_account
+  destinationUrl   String    // display/routing: webhook URL, chat ID, endpoint URL, X handle
+  deliveryMode     String    @default("alert_fanout") // alert_fanout | public_thread | digest
+  enabled          Boolean   @default(true)
+  minimumSeverity  String    @default("watch")
+  pollingFrequency String    @default("1hr") // 15min | 30min | 1hr | 24hr
+  lastPolledAt     DateTime?
+  configEncrypted  String?   // AES-256-GCM encrypted JSON — sensitive credentials only
+  configPreview    Json?     // non-secret display fields: handle, credentialStatus, lastVerifiedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  account      RadarAccount        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  deliveryLogs RadarDeliveryLog[]
+
+  @@map("radar_delivery_destinations")
+}
+
+// ── Delivery log ──────────────────────────────────────────────────────────────
+// One row per destination per manual (or later, cron) delivery attempt.
+// Written for every destination that was actually considered "in scope" for a
+// run (enabled + channel requested) — destinations excluded before that point
+// (disabled, wrong channel) are reported back to the caller but not logged.
+
+model RadarDeliveryLog {
+  id             String    @id @default(cuid())
+  accountId      String
+  destinationId  String
+  watchlistId    String?   // set only when a single watchlist was the sole match source
+  alertIds       Json      @default("[]")
+  channel        String
+  reportId       String?   // SCE report ID, if applicable
+  cadence        String
+  windowStart    DateTime
+  windowEnd      DateTime
+  format         String
+  status         String    // sent | skipped | blocked | failed | dry_run
+  messageCount   Int       @default(0)
+  sanitizedError String?
+  externalIds    Json?
+  sentAt         DateTime  @default(now())
+
+  account     RadarAccount             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  destination RadarDeliveryDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@map("radar_delivery_logs")
+}

@@ -11,6 +11,7 @@ export type RadarLiveDeliveryChannel = "discord" | "telegram" | "webhook";
 export type RadarLiveDeliveryStatus = "pending" | "sent" | "skipped" | "failed";
 export type RadarNotificationChannel = "discord";
 export type RadarWatchlistDeliveryChannel = "discord" | "telegram" | "email" | "webhook";
+export type RadarDeliveryMode = "alert_fanout" | "public_thread" | "digest";
 
 export type AccountType = "internal" | "client" | "demo";
 export type AccountStatus = "active" | "pending" | "suspended";
@@ -113,7 +114,7 @@ export interface RadarDeliveryDestination {
   channel: RadarLiveDeliveryChannel;
   destinationUrl: string;
   purpose?: string;
-  deliveryMode: "live" | "dry_run";
+  deliveryMode: RadarDeliveryMode;
   minimumSeverity: RadarSeverity;
   monitorTypes: RadarMonitorType[];
   sources: string[];
@@ -122,6 +123,14 @@ export interface RadarDeliveryDestination {
   routes: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RadarGms {
+  monitoredValueUsd?: number;
+  grossMonitoredSurfaceUsd?: number;
+  oracleTvsUsd?: number | null;
+  bridgeVolume24hUsd?: number | null;
+  lpTvlUsd?: number | null;
 }
 
 export interface RadarDailyBriefRecord {

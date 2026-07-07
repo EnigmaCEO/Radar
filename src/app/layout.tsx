@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Radar by Sagitta — DeFi Infrastructure Intelligence",
+    default: "Radar by Sagitta Labs — DeFi Infrastructure Intelligence",
     template: "%s | Radar",
   },
   description:
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: "https://radar.sagitta.systems",
-    siteName: "Radar by Sagitta",
+    siteName: "Radar by Sagitta Labs",
   },
 };
 
@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}>
         <Providers>{children}</Providers>
       </body>
