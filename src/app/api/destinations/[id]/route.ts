@@ -59,35 +59,37 @@ function normalizeDestinationRecord(record: Record<string, unknown>) {
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth0.getSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const account = await getAccount();
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  const { id } = await params;
 
   const existing = await deliveryDestinations.findFirst({
-    where: { id: params.id, accountId: account.id },
+    where: { id, accountId: account.id },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await deliveryDestinations.delete({ where: { id: params.id } });
+  await deliveryDestinations.delete({ where: { id } });
   return new NextResponse(null, { status: 204 });
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth0.getSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const account = await getAccount();
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  const { id } = await params;
 
   const existing = await deliveryDestinations.findFirst({
-    where: { id: params.id, accountId: account.id },
+    where: { id, accountId: account.id },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -106,7 +108,7 @@ export async function PATCH(
 
   try {
     const updated = (await deliveryDestinations.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(body.enabled !== undefined && { enabled: body.enabled }),
         ...(body.minimumSeverity !== undefined && { minimumSeverity: body.minimumSeverity }),
@@ -123,7 +125,7 @@ export async function PATCH(
     if (!isDeliveryModeCompatibilityError(error)) throw error;
 
     const updated = (await deliveryDestinations.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(body.enabled !== undefined && { enabled: body.enabled }),
         ...(body.minimumSeverity !== undefined && { minimumSeverity: body.minimumSeverity }),

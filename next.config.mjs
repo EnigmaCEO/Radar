@@ -5,11 +5,7 @@ import {
 } from "next/constants.js";
 
 /** @type {import('next').NextConfig} */
-const baseConfig = {
-  images: {
-    domains: [],
-  },
-};
+const baseConfig = {};
 
 export default function nextConfig(phase) {
   if (phase === PHASE_DEVELOPMENT_SERVER) {

@@ -60,16 +60,17 @@ async function testWebhook(url: string): Promise<void> {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth0.getSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const account = await getAccount();
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  const { id } = await params;
 
   const dest = await db.radarDeliveryDestination.findFirst({
-    where: { id: params.id, accountId: account.id },
+    where: { id, accountId: account.id },
   });
   if (!dest) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

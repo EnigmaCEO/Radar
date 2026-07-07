@@ -51,8 +51,32 @@ export default function AlertsPage() {
   }
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+
+    void (async () => {
+      setLoading(true);
+      try {
+        const data = await listAlerts({
+          status: status || undefined,
+          severity: severity || undefined,
+          monitorType: monitorType || undefined,
+          limit: 100,
+        });
+        if (!cancelled) {
+          setAlerts(sortAlertsBySeverityAndCreatedAt(data));
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [severity, monitorType, status]);
 
   return (

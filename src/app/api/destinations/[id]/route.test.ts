@@ -58,7 +58,7 @@ describe("PATCH /api/destinations/[id]", () => {
   });
 
   it("updates deliveryMode", async () => {
-    const res = await PATCH(req({ deliveryMode: "digest" }), { params: { id: "dest_1" } });
+    const res = await PATCH(req({ deliveryMode: "digest" }), { params: Promise.resolve({ id: "dest_1" }) });
     const data = await res.json();
     const updateArgs = vi.mocked(db.radarDeliveryDestination.update).mock.calls[0][0] as {
       data: Record<string, unknown>;
@@ -70,7 +70,7 @@ describe("PATCH /api/destinations/[id]", () => {
   });
 
   it("rejects invalid deliveryMode values", async () => {
-    const res = await PATCH(req({ deliveryMode: "bad_mode" }), { params: { id: "dest_1" } });
+    const res = await PATCH(req({ deliveryMode: "bad_mode" }), { params: Promise.resolve({ id: "dest_1" }) });
 
     expect(res.status).toBe(400);
     expect(db.radarDeliveryDestination.update).not.toHaveBeenCalled();

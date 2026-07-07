@@ -6,8 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.23.1",
@@ -16,7 +19,7 @@
     "@stripe/stripe-js": "^4.0.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.436.0",
-    "next": "14.2.29",
+    "next": "16.2.10",
     "next-themes": "^0.3.0",
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
@@ -29,8 +32,8 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.29",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "16.2.10",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",

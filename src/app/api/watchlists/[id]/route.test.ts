@@ -41,7 +41,7 @@ describe("PATCH /api/watchlists/[id]", () => {
 
   it("requires an Auth0 session", async () => {
     vi.mocked(auth0.getSession).mockResolvedValue(null);
-    const res = await PATCH(patchReq({ enabled: false }), { params: { id: "wl_1" } });
+    const res = await PATCH(patchReq({ enabled: false }), { params: Promise.resolve({ id: "wl_1" }) });
     expect(res.status).toBe(401);
   });
 
@@ -50,7 +50,7 @@ describe("PATCH /api/watchlists/[id]", () => {
     // account will never match, simulating cross-account access being blocked.
     vi.mocked(db.radarWatchlist.findFirst).mockResolvedValue(null);
 
-    const res = await PATCH(patchReq({ enabled: false }), { params: { id: "wl_1" } });
+    const res = await PATCH(patchReq({ enabled: false }), { params: Promise.resolve({ id: "wl_1" }) });
 
     expect(db.radarWatchlist.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "wl_1", accountId: "acct_1" } }),
@@ -63,7 +63,7 @@ describe("PATCH /api/watchlists/[id]", () => {
     vi.mocked(db.radarWatchlist.findFirst).mockResolvedValue({ id: "wl_1", accountId: "acct_1" } as never);
     vi.mocked(db.radarWatchlist.update).mockResolvedValue({ id: "wl_1", enabled: false } as never);
 
-    const res = await PATCH(patchReq({ enabled: false }), { params: { id: "wl_1" } });
+    const res = await PATCH(patchReq({ enabled: false }), { params: Promise.resolve({ id: "wl_1" }) });
 
     expect(res.status).toBe(200);
     expect(db.radarWatchlist.update).toHaveBeenCalledWith(
@@ -74,7 +74,7 @@ describe("PATCH /api/watchlists/[id]", () => {
   it("rejects invalid filter values on update", async () => {
     vi.mocked(db.radarWatchlist.findFirst).mockResolvedValue({ id: "wl_1", accountId: "acct_1" } as never);
 
-    const res = await PATCH(patchReq({ minSeverity: "info" }), { params: { id: "wl_1" } });
+    const res = await PATCH(patchReq({ minSeverity: "info" }), { params: Promise.resolve({ id: "wl_1" }) });
 
     expect(res.status).toBe(400);
     expect(db.radarWatchlist.update).not.toHaveBeenCalled();
@@ -90,14 +90,14 @@ describe("DELETE /api/watchlists/[id]", () => {
 
   it("requires an Auth0 session", async () => {
     vi.mocked(auth0.getSession).mockResolvedValue(null);
-    const res = await DELETE(deleteReq(), { params: { id: "wl_1" } });
+    const res = await DELETE(deleteReq(), { params: Promise.resolve({ id: "wl_1" }) });
     expect(res.status).toBe(401);
   });
 
   it("returns 404 (not another account's watchlist) when not owned by the caller's account", async () => {
     vi.mocked(db.radarWatchlist.findFirst).mockResolvedValue(null);
 
-    const res = await DELETE(deleteReq(), { params: { id: "wl_1" } });
+    const res = await DELETE(deleteReq(), { params: Promise.resolve({ id: "wl_1" }) });
 
     expect(res.status).toBe(404);
     expect(db.radarWatchlist.delete).not.toHaveBeenCalled();
@@ -107,7 +107,7 @@ describe("DELETE /api/watchlists/[id]", () => {
     vi.mocked(db.radarWatchlist.findFirst).mockResolvedValue({ id: "wl_1", accountId: "acct_1" } as never);
     vi.mocked(db.radarWatchlist.delete).mockResolvedValue({} as never);
 
-    const res = await DELETE(deleteReq(), { params: { id: "wl_1" } });
+    const res = await DELETE(deleteReq(), { params: Promise.resolve({ id: "wl_1" }) });
 
     expect(res.status).toBe(204);
     expect(db.radarWatchlist.delete).toHaveBeenCalledWith({ where: { id: "wl_1" } });

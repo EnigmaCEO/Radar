@@ -6,16 +6,17 @@ import { WatchlistValidationError, validateWatchlistFilters } from "@/lib/watchl
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth0.getSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const account = await getAccount();
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  const { id } = await params;
 
   const existing = await db.radarWatchlist.findFirst({
-    where: { id: params.id, accountId: account.id },
+    where: { id, accountId: account.id },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -30,7 +31,7 @@ export async function PATCH(
     const filters = validateWatchlistFilters(body);
 
     const updated = await db.radarWatchlist.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(body.name !== undefined && { name: body.name as string }),
         ...(body.description !== undefined && {
@@ -54,19 +55,20 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth0.getSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const account = await getAccount();
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  const { id } = await params;
 
   const existing = await db.radarWatchlist.findFirst({
-    where: { id: params.id, accountId: account.id },
+    where: { id, accountId: account.id },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await db.radarWatchlist.delete({ where: { id: params.id } });
+  await db.radarWatchlist.delete({ where: { id } });
   return new NextResponse(null, { status: 204 });
 }

@@ -1187,7 +1187,32 @@ export default function DestinationsPage() {
   }
 
   useEffect(() => {
-    void loadDestinations();
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/destinations?ts=${Date.now()}`, {
+          cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(typeof data?.error === "string" ? data.error : "Failed to load destinations");
+        }
+        if (!cancelled) {
+          setDestinations(data);
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const atLimit = limit !== Infinity && destinations.length >= limit;

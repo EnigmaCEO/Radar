@@ -41,7 +41,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    refresh();
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const data = await getMe();
+        if (!cancelled) {
+          setMe(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setMe(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
