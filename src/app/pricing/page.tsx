@@ -7,6 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+function buildSignupHref(plan?: "radar_live" | "radar_pro") {
+  if (!plan) return "/auth/login?screen_hint=signup";
+  const params = new URLSearchParams({
+    screen_hint: "signup",
+    returnTo: `/dashboard/settings?upgrade=${plan}`,
+  });
+  return `/login?${params.toString()}`;
+}
+
 export const metadata: Metadata = {
   title: "Pricing",
   description: "Simple, transparent pricing for DeFi infrastructure monitoring.",
@@ -16,7 +25,7 @@ const plans = [
   {
     name: "Free",
     slug: "free",
-    priceLabel: "Free",
+    priceLabel: "$0",
     description: "Get a feel for Radar with the public daily brief and alert feed.",
     features: [
       { text: "Daily signal briefings", included: true },
@@ -27,13 +36,13 @@ const plans = [
       { text: "Discord / Telegram / Webhook", included: false },
     ],
     highlight: false,
-    cta: "Request access",
-    ctaHref: "/request-access",
+    cta: "Start free",
+    ctaHref: buildSignupHref(),
   },
   {
     name: "Radar Live",
     slug: "radar_live",
-    priceLabel: "Contact us",
+    priceLabel: "$49/mo",
     description: "Real-time delivery for teams that need to act fast on infrastructure changes.",
     features: [
       { text: "Everything in Free", included: true },
@@ -44,13 +53,13 @@ const plans = [
       { text: "Webhook delivery", included: false },
     ],
     highlight: true,
-    cta: "Request access",
-    ctaHref: "/request-access",
+    cta: "Get started",
+    ctaHref: buildSignupHref("radar_live"),
   },
   {
     name: "Radar Pro",
     slug: "radar_pro",
-    priceLabel: "Contact us",
+    priceLabel: "$199/mo",
     description: "For protocols and teams managing multiple dependencies across chains.",
     features: [
       { text: "Everything in Radar Live", included: true },
@@ -61,13 +70,13 @@ const plans = [
       { text: "Priority support", included: false },
     ],
     highlight: false,
-    cta: "Request access",
-    ctaHref: "/request-access",
+    cta: "Get started",
+    ctaHref: buildSignupHref("radar_pro"),
   },
   {
     name: "Managed",
     slug: "managed",
-    priceLabel: "Contact us",
+    priceLabel: "Custom pricing",
     description: "Full-service for DeFi protocols, funds, and security teams.",
     features: [
       { text: "Everything in Pro", included: true },
@@ -78,7 +87,7 @@ const plans = [
       { text: "Custom coverage configuration", included: true },
     ],
     highlight: false,
-    cta: "Request access",
+    cta: "Talk to us",
     ctaHref: "/request-access",
   },
 ];

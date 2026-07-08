@@ -7,6 +7,15 @@ import { getMonitoredValueUsd, formatUsd } from "@/lib/radar-stats";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
+function buildSignupHref(plan?: "radar_live" | "radar_pro") {
+  if (!plan) return "/auth/login?screen_hint=signup";
+  const params = new URLSearchParams({
+    screen_hint: "signup",
+    returnTo: `/dashboard/settings?upgrade=${plan}`,
+  });
+  return `/login?${params.toString()}`;
+}
+
 // ── Sample signal feed ───────────────────────────────────────────────────────
 
 const SEV_COLOR: Record<string, string> = {
@@ -89,7 +98,7 @@ const plans = [
     tag: null,
     features: ["Daily signal briefings", "Public alert feed", "1-day alert history", "1 webhook destination"],
     cta: "Start free",
-    ctaHref: "/auth/login?screen_hint=signup",
+    ctaHref: buildSignupHref(),
     highlight: false,
   },
   {
@@ -107,7 +116,7 @@ const plans = [
       "7-day alert history",
     ],
     cta: "Get started",
-    ctaHref: "/auth/login?screen_hint=signup",
+    ctaHref: buildSignupHref("radar_live"),
     highlight: true,
   },
   {
@@ -125,7 +134,7 @@ const plans = [
       "30-day alert history",
     ],
     cta: "Get started",
-    ctaHref: "/auth/login?screen_hint=signup",
+    ctaHref: buildSignupHref("radar_pro"),
     highlight: false,
   },
   {

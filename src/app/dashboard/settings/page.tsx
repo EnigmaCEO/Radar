@@ -41,12 +41,14 @@ export default function SettingsPage() {
   const nextPlan = NEXT_PLAN[plan];
 
   const checkoutStatus = searchParams.get("checkout");
+  const requestedUpgrade = searchParams.get("upgrade");
 
   const [mfaEnabled, setMfaEnabled] = useState<boolean | null>(null);
   const [mfaLoading, setMfaLoading] = useState(false);
   const [mfaMessage, setMfaMessage] = useState<string | null>(null);
   const [upgrading, setUpgrading] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [autoUpgradeAttempted, setAutoUpgradeAttempted] = useState<string | null>(null);
 
   useEffect(() => {
     if (checkoutStatus === "success") {
@@ -62,6 +64,16 @@ export default function SettingsPage() {
       .then((d) => setMfaEnabled(d.enabled))
       .catch(() => setMfaEnabled(false));
   }, []);
+
+  useEffect(() => {
+    if (!requestedUpgrade || checkoutStatus === "success") return;
+    if (requestedUpgrade !== "radar_live" && requestedUpgrade !== "radar_pro") return;
+    if (requestedUpgrade === plan) return;
+    if (autoUpgradeAttempted === requestedUpgrade) return;
+
+    setAutoUpgradeAttempted(requestedUpgrade);
+    void startUpgrade(requestedUpgrade);
+  }, [autoUpgradeAttempted, checkoutStatus, plan, requestedUpgrade]);
 
   async function toggleMfa() {
     if (mfaEnabled === null) return;
@@ -102,11 +114,15 @@ export default function SettingsPage() {
       const data = await res.json();
       if (!res.ok) {
         console.error("Upgrade error:", data.error);
-        throw new Error("Upgrade failed");
+        throw new Error(typeof data.error === "string" ? data.error : "Upgrade failed");
       }
       window.location.href = data.url;
-    } catch {
-      setUpgradeError("Unable to process upgrade. Please try again or contact support.");
+    } catch (error) {
+      setUpgradeError(
+        error instanceof Error
+          ? error.message
+          : "Unable to process upgrade. Please try again or contact support.",
+      );
       setUpgrading(false);
     }
   }
