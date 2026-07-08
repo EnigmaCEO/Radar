@@ -32,9 +32,9 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/auth/login?screen_hint=signup" className="hover:text-foreground transition-colors">
+                <a href="/auth/login?screen_hint=signup" className="hover:text-foreground transition-colors">
                   Get started
-                </Link>
+                </a>
               </li>
               <li>
                 <Link href="/request-access" className="hover:text-foreground transition-colors">

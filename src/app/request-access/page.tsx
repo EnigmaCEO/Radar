@@ -160,9 +160,9 @@ export default function RequestAccessPage() {
 
               <p className="text-center text-xs text-slate-500">
                 Looking for Free, Live, or Pro?{" "}
-                <Link href="/auth/login" className="text-purple-400 underline underline-offset-4 hover:text-purple-300">
+                <a href="/auth/login" className="text-purple-400 underline underline-offset-4 hover:text-purple-300">
                   Sign up directly
-                </Link>
+                </a>
               </p>
             </form>
           </CardContent>

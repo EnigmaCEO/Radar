@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
-import type { RadarAccount } from "@prisma/client";
+import type { RadarAccount } from "@/lib/radar-account";
 import { AccountProvider } from "@/lib/account-context";
 import { DashboardNav } from "@/components/nav";
 import { Logo } from "@/components/logo";
@@ -19,8 +18,6 @@ export function DashboardShell({
   userEmail: string;
   children: React.ReactNode;
 }) {
-  const router = useRouter();
-
   return (
     <AccountProvider account={account} userEmail={userEmail}>
       <div className="flex min-h-screen flex-col">
@@ -37,7 +34,7 @@ export function DashboardShell({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => router.push("/auth/logout")}
+                onClick={() => window.location.assign("/auth/logout")}
                 aria-label="Sign out"
               >
                 <LogOut className="h-4 w-4" />

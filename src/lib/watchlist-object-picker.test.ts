@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SceCatalogObject } from "./sce-catalog";
+import type { SceCatalogObject } from "./sce-catalog-types";
 import { filterObjectsForPicker, groupObjectsByMonitorType } from "./watchlist-object-picker";
 
 function makeObject(overrides: Partial<SceCatalogObject>): SceCatalogObject {

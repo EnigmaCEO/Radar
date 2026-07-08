@@ -1,4 +1,4 @@
-import type { SceCatalogObject, SceMonitorType } from "./sce-catalog";
+import type { SceCatalogObject, SceMonitorType } from "./sce-catalog-types";
 
 export const OBJECT_PICKER_MONITOR_TYPE_ORDER: SceMonitorType[] = ["oracle", "bridge", "lp"];
 

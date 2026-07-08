@@ -316,9 +316,9 @@ export default async function LandingPage() {
 
             <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white" asChild>
-                <Link href="/auth/login">
+                <a href="/auth/login">
                   Get started free <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                </a>
               </Button>
               <Button size="lg" variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white hover:border-white/25" asChild>
                 <Link href="#pricing">See pricing</Link>
@@ -499,7 +499,7 @@ export default async function LandingPage() {
                 </CardContent>
 
                 <CardFooter className="pt-0">
-                  <Link
+                  <a
                     href={plan.ctaHref}
                     className={
                       plan.highlight
@@ -509,7 +509,7 @@ export default async function LandingPage() {
                   >
                     {plan.cta}
                     <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                  </Link>
+                  </a>
                 </CardFooter>
               </Card>
             ))}
@@ -536,15 +536,15 @@ export default async function LandingPage() {
           </p>
           <div className="mt-8 flex flex-col items-center gap-3">
             <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white" asChild>
-              <Link href="/auth/login?screen_hint=signup">
+              <a href="/auth/login?screen_hint=signup">
                 Get started free <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
+              </a>
             </Button>
             <p className="text-sm text-slate-500">
               Already have an account?{" "}
-              <Link href="/auth/login" className="text-purple-400 hover:text-purple-300 underline underline-offset-4">
+              <a href="/auth/login" className="text-purple-400 hover:text-purple-300 underline underline-offset-4">
                 Sign in
-              </Link>
+              </a>
             </p>
           </div>
         </div>

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { getAccount } from "@/lib/account";
-import { db } from "@/lib/db";
-import { WatchlistValidationError, validateWatchlistFilters } from "@/lib/watchlist-filters";
+import {
+  forwardRadarApiRequest,
+  toProxyResponse,
+} from "@/lib/radar-api-backend";
 
 export async function PATCH(
   request: NextRequest,
@@ -10,47 +11,17 @@ export async function PATCH(
 ) {
   const session = await auth0.getSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const account = await getAccount();
-  if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
   const { id } = await params;
 
-  const existing = await db.radarWatchlist.findFirst({
-    where: { id, accountId: account.id },
+  // Temporary adapter while the dashboard still talks to same-origin /api routes.
+  const body = await request.text();
+  const response = await forwardRadarApiRequest(`/v1/watchlists/${id}`, {
+    method: "PATCH",
+    session,
+    body,
+    contentType: request.headers.get("content-type"),
   });
-  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!body) return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
-
-  if (body.name !== undefined && (typeof body.name !== "string" || body.name.trim() === "")) {
-    return NextResponse.json({ error: "name must be a non-empty string." }, { status: 400 });
-  }
-
-  try {
-    const filters = validateWatchlistFilters(body);
-
-    const updated = await db.radarWatchlist.update({
-      where: { id },
-      data: {
-        ...(body.name !== undefined && { name: body.name as string }),
-        ...(body.description !== undefined && {
-          description: typeof body.description === "string" ? body.description : null,
-        }),
-        ...(body.enabled !== undefined && { enabled: body.enabled === true }),
-        ...filters,
-      },
-    });
-
-    return NextResponse.json(updated);
-  } catch (err) {
-    if (err instanceof WatchlistValidationError) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
-    }
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("Watchlists PATCH error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+  return toProxyResponse(response);
 }
 
 export async function DELETE(
@@ -59,16 +30,12 @@ export async function DELETE(
 ) {
   const session = await auth0.getSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const account = await getAccount();
-  if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
   const { id } = await params;
 
-  const existing = await db.radarWatchlist.findFirst({
-    where: { id, accountId: account.id },
+  // Temporary adapter while the dashboard still talks to same-origin /api routes.
+  const response = await forwardRadarApiRequest(`/v1/watchlists/${id}`, {
+    method: "DELETE",
+    session,
   });
-  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  await db.radarWatchlist.delete({ where: { id } });
-  return new NextResponse(null, { status: 204 });
+  return toProxyResponse(response);
 }

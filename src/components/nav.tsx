@@ -70,14 +70,14 @@ export function Nav() {
                 className="text-slate-300 hover:text-white hover:bg-white/10"
                 asChild
               >
-                <Link href="/login">Sign in</Link>
+                <a href="/auth/login">Sign in</a>
               </Button>
               <Button
                 size="sm"
                 className="bg-violet-600 hover:bg-violet-700 text-white"
                 asChild
               >
-                <Link href="/auth/login?screen_hint=signup">Get started free</Link>
+                <a href="/auth/login?screen_hint=signup">Get started free</a>
               </Button>
             </>
           )}

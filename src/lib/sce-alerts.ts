@@ -304,7 +304,9 @@ function sanitizeLedgerEvent(raw: Record<string, unknown>): SceAlertLedgerEvent 
 }
 
 function getSceBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? "https://continuityengineserver.fly.dev";
+  return process.env.SCE_API_BASE_URL
+    ?? process.env.NEXT_PUBLIC_API_URL
+    ?? "https://continuityengineserver.fly.dev";
 }
 
 function getSceAdminKey(): string {

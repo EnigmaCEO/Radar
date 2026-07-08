@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { fetchSceCatalog, SceCatalogError } from "@/lib/sce-catalog";
+import {
+  forwardRadarApiRequest,
+  toProxyResponse,
+} from "@/lib/radar-api-backend";
 
 export async function GET(request: NextRequest) {
   const session = await auth0.getSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  try {
-    const catalog = await fetchSceCatalog();
-    return NextResponse.json(catalog);
-  } catch (err) {
-    const message = err instanceof SceCatalogError ? err.message : "SCE catalog is unavailable.";
-    console.error("Radar catalog GET error:", err instanceof Error ? err.message : err);
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
+  // Temporary adapter while the dashboard still talks to same-origin /api routes.
+  const response = await forwardRadarApiRequest("/v1/radar/catalog", {
+    method: "GET",
+    session,
+  });
+  return toProxyResponse(response);
 }

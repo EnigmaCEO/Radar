@@ -5,10 +5,10 @@ import { DashboardShell } from "@/components/dashboard-shell";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth0.getSession();
-  if (!session) redirect("/auth/login");
+  if (!session) redirect("/login");
 
   const account = await getAccount();
-  if (!account) redirect("/auth/login");
+  if (!account) redirect("/login");
 
   const userEmail = (session.user as { email?: string }).email ?? "";
 

@@ -1,5 +1,6 @@
 # dependencies
 /node_modules
+**/node_modules/
 /.pnp
 .pnp.js
 
@@ -14,6 +15,8 @@
 
 # production
 /build
+apps/radar-api/dist/
+apps/radar-api/
 
 # misc
 .DS_Store

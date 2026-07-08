@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Pencil, Plus, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { useAccount } from "@/lib/account-context";
 import { getWatchlistLimit } from "@/lib/plan-limits";
-import type { SceCatalogObject, SceCatalogResponse, SceMonitorType } from "@/lib/sce-catalog";
+import type { SceCatalogObject, SceCatalogResponse, SceMonitorType } from "@/lib/sce-catalog-types";
 import {
   OBJECT_PICKER_MONITOR_TYPE_ORDER,
   filterObjectsForPicker,

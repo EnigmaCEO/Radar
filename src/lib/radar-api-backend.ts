@@ -1,0 +1,136 @@
+import type { SessionData } from "@auth0/nextjs-auth0/types";
+
+function getRadarApiBaseUrl(): string | null {
+  const value = process.env.RADAR_API_BASE_URL;
+  return value && value.trim().length > 0 ? value.replace(/\/+$/, "") : null;
+}
+
+function getRadarApiSharedSecret(): string {
+  const secret = process.env.RADAR_API_SHARED_SECRET;
+  if (!secret || secret.trim().length === 0) {
+    throw new Error("RADAR_API_SHARED_SECRET is not configured.");
+  }
+  return secret;
+}
+
+export function hasRadarApiBackend(): boolean {
+  return getRadarApiBaseUrl() !== null;
+}
+
+function getUser(session: SessionData) {
+  return session.user as { sub: string; name?: string; email?: string };
+}
+
+function buildActorHeaders(session: SessionData): HeadersInit {
+  const user = getUser(session);
+  return {
+    "x-radar-api-key": getRadarApiSharedSecret(),
+    "x-radar-auth0-sub": user.sub,
+    ...(user.name ? { "x-radar-auth0-name": user.name } : {}),
+    ...(user.email ? { "x-radar-auth0-email": user.email } : {}),
+  };
+}
+
+export async function bootstrapRadarAccount(session: SessionData) {
+  const baseUrl = getRadarApiBaseUrl();
+  if (!baseUrl) {
+    throw new Error("RADAR_API_BASE_URL is not configured.");
+  }
+
+  const response = await fetch(`${baseUrl}/v1/accounts/bootstrap`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildActorHeaders(session),
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Radar API bootstrap failed (${response.status})${detail ? `: ${detail}` : ""}`);
+  }
+
+  return response.json();
+}
+
+export async function forwardRadarApiRequest(
+  path: string,
+  {
+    method = "GET",
+    session,
+    body,
+    contentType,
+    headers,
+  }: {
+    method?: string;
+    session: SessionData;
+    body?: string;
+    contentType?: string | null;
+    headers?: HeadersInit;
+  },
+) {
+  const baseUrl = getRadarApiBaseUrl();
+  if (!baseUrl) {
+    throw new Error("RADAR_API_BASE_URL is not configured.");
+  }
+
+  const requestHeaders = new Headers(buildActorHeaders(session));
+  if (contentType) {
+    requestHeaders.set("Content-Type", contentType);
+  }
+  if (headers) {
+    const extraHeaders = new Headers(headers);
+    extraHeaders.forEach((value, key) => requestHeaders.set(key, value));
+  }
+
+  return fetch(`${baseUrl}${path}`, {
+    method,
+    headers: requestHeaders,
+    body,
+    cache: "no-store",
+  });
+}
+
+export async function forwardRadarApiWebhook(
+  path: string,
+  {
+    body,
+    headers,
+  }: {
+    body: string;
+    headers?: HeadersInit;
+  },
+) {
+  const baseUrl = getRadarApiBaseUrl();
+  if (!baseUrl) {
+    throw new Error("RADAR_API_BASE_URL is not configured.");
+  }
+
+  const requestHeaders = new Headers({
+    "x-radar-api-key": getRadarApiSharedSecret(),
+  });
+  if (headers) {
+    const extraHeaders = new Headers(headers);
+    extraHeaders.forEach((value, key) => requestHeaders.set(key, value));
+  }
+
+  return fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers: requestHeaders,
+    body,
+    cache: "no-store",
+  });
+}
+
+export function toProxyResponse(response: Response): Response {
+  const headers = new Headers();
+  const contentType = response.headers.get("content-type");
+  if (contentType) headers.set("content-type", contentType);
+  const cacheControl = response.headers.get("cache-control");
+  if (cacheControl) headers.set("cache-control", cacheControl);
+  return new Response(response.body, {
+    status: response.status,
+    headers,
+  });
+}
