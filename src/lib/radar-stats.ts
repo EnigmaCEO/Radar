@@ -1,6 +1,9 @@
 import type { RadarGms } from "@/lib/api-types";
+import { stripTrailingSlash } from "@/lib/utils";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://continuityengineserver.fly.dev";
+const API_BASE = stripTrailingSlash(
+  process.env.NEXT_PUBLIC_API_URL ?? "https://continuityengineserver.fly.dev",
+);
 const FALLBACK_VALUE_USD = 3_000_000_000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 

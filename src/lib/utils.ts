@@ -31,3 +31,7 @@ export function severityBadgeClass(severity: "watch" | "warning" | "critical"): 
     critical: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
   }[severity];
 }
+
+export function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}

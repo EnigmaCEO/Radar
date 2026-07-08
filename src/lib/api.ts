@@ -7,8 +7,11 @@ import type {
   RadarWatchlist,
   SaasMeResponse,
 } from "./api-types";
+import { stripTrailingSlash } from "./utils";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://continuityengineserver.fly.dev";
+const API_BASE = stripTrailingSlash(
+  process.env.NEXT_PUBLIC_API_URL ?? "https://continuityengineserver.fly.dev",
+);
 
 class ApiError extends Error {
   constructor(
