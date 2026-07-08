@@ -64,6 +64,11 @@ export function Footer() {
             <h4 className="mb-3 text-sm font-semibold text-foreground">Sagitta</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
+                <Link href="/support" className="hover:text-foreground transition-colors">
+                  Support
+                </Link>
+              </li>
+              <li>
                 <a
                   href="https://sagitta.systems"
                   target="_blank"
