@@ -42,6 +42,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function requestSameOrigin<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...init?.headers },
+    ...init,
+  });
+  if (!res.ok) {
+    let detail: unknown;
+    try {
+      detail = await res.json();
+    } catch {
+      detail = await res.text();
+    }
+    throw new ApiError(res.status, `API error ${res.status}`, detail);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 // ── Auth ───────────────────────────────────────────────────────────────────────
 
 export async function login(email: string): Promise<SaasMeResponse> {
@@ -86,7 +105,7 @@ export async function listAlerts(params?: {
   if (params?.monitorType) query.set("monitor_type", params.monitorType);
   if (params?.limit) query.set("limit", String(params.limit));
   const qs = query.toString();
-  return request<RadarAlert[]>(`/v1/sce/radar/alerts${qs ? `?${qs}` : ""}`);
+  return requestSameOrigin<RadarAlert[]>(`/api/alerts${qs ? `?${qs}` : ""}`);
 }
 
 export async function getAlert(id: string): Promise<RadarAlert> {

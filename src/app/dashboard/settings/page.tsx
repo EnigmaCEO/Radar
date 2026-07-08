@@ -81,8 +81,10 @@ export default function SettingsPage() {
           ? "MFA enabled. You'll be prompted to enroll on next login."
           : "MFA disabled.",
       );
-    } catch {
-      setMfaMessage("Failed to update MFA. Please try again.");
+    } catch (error) {
+      setMfaMessage(
+        error instanceof Error ? error.message : "Failed to update MFA. Please try again.",
+      );
     } finally {
       setMfaLoading(false);
     }
