@@ -13,7 +13,7 @@ const supportCards = [
   {
     title: "General support",
     icon: LifeBuoy,
-    body: "For product questions, onboarding, delivery setup, or operational issues, email hello@sagitta.systems.",
+    body: "For product questions, onboarding, delivery setup, or operational issues, email radar@sagitta.systems.",
   },
   {
     title: "Billing",
@@ -64,10 +64,10 @@ export default function SupportPage() {
               <p>
                 Email:{" "}
                 <a
-                  href="mailto:hello@sagitta.systems"
+                  href="mailto:radar@sagitta.systems"
                   className="text-foreground underline underline-offset-4"
                 >
-                  hello@sagitta.systems
+                  radar@sagitta.systems
                 </a>
               </p>
               <p>
@@ -101,7 +101,7 @@ export default function SupportPage() {
 
           <section className="mt-10 border-t border-border pt-8">
             <a
-              href="mailto:hello@sagitta.systems?subject=Radar%20Support"
+              href="mailto:radar@sagitta.systems?subject=Radar%20Support"
               className="inline-flex items-center gap-2 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
             >
               <Mail className="h-4 w-4" />

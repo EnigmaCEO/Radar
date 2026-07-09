@@ -137,7 +137,7 @@ export default function DashboardPage() {
                     className="bg-violet-600 hover:bg-violet-700 text-white"
                     asChild
                   >
-                    <a href="mailto:hello@sagitta.systems?subject=Radar Managed Plan">
+                    <a href="mailto:radar@sagitta.systems?subject=Radar Managed Plan">
                       Talk to us <ArrowRight className="ml-1 h-3 w-3" />
                     </a>
                   </Button>

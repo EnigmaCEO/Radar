@@ -47,7 +47,7 @@ const sections = [
     title: "Your choices",
     body: [
       "You can contact us to request updates or deletion of account-related information, subject to legal, security, and contractual requirements.",
-      "For privacy questions, contact hello@sagitta.systems.",
+      "For privacy questions, contact radar@sagitta.systems.",
     ],
   },
 ];
@@ -88,10 +88,10 @@ export default function PrivacyPage() {
           <div className="mt-12 border-t border-border pt-6 text-sm text-muted-foreground">
             Questions about this policy can be sent to{" "}
             <a
-              href="mailto:hello@sagitta.systems"
+              href="mailto:radar@sagitta.systems"
               className="text-foreground underline underline-offset-4"
             >
-              hello@sagitta.systems
+              radar@sagitta.systems
             </a>
             . Support options are also available on the{" "}
             <Link href="/support" className="text-foreground underline underline-offset-4">

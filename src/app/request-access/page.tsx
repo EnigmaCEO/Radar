@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-const MANAGED_CONTACT_EMAIL = "hello@sagitta.systems";
+const MANAGED_CONTACT_EMAIL = "radar@sagitta.systems";
 
 export default function RequestAccessPage() {
   const [form, setForm] = useState({

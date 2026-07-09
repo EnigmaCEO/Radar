@@ -54,7 +54,7 @@ const sections = [
   {
     title: "Contact",
     body: [
-      "Questions about these terms can be sent to hello@sagitta.systems.",
+      "Questions about these terms can be sent to radar@sagitta.systems.",
     ],
   },
 ];
