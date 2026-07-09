@@ -45,7 +45,25 @@ export function DashboardShell({
 
         <div className="flex flex-1">
           <DashboardNav />
-          <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+            <footer className="border-t border-border/60 px-4 py-4 md:px-6">
+              <div className="flex flex-col gap-2 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
+                <span>&copy; {new Date().getFullYear()} Sagitta Systems. All rights reserved.</span>
+                <div className="flex flex-wrap items-center gap-4">
+                  <Link href="/privacy" className="hover:text-foreground transition-colors">
+                    Privacy
+                  </Link>
+                  <Link href="/terms" className="hover:text-foreground transition-colors">
+                    Terms
+                  </Link>
+                  <Link href="/support" className="hover:text-foreground transition-colors">
+                    Support
+                  </Link>
+                </div>
+              </div>
+            </footer>
+          </div>
         </div>
       </div>
     </AccountProvider>
