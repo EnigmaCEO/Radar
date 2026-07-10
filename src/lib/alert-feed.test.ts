@@ -5,6 +5,7 @@ import {
   DASHBOARD_RECENT_ALERT_PREVIEW_LIMIT,
   loadDashboardAlertSummary,
   sortAlertsBySeverityAndCreatedAt,
+  sortAlertsByUpdatedAt,
   summarizeDashboardAlerts,
 } from "./alert-feed";
 
@@ -29,7 +30,7 @@ function makeAlert(overrides: Partial<RadarAlert> = {}): RadarAlert {
 
 describe("alert-feed", () => {
   it("uses the full active alert fetch for dashboard totals instead of the preview size", async () => {
-    const alerts = Array.from({ length: 11 }, (_, index) =>
+    const activeAlerts = Array.from({ length: 11 }, (_, index) =>
       makeAlert({
         id: `alert-${index + 1}`,
         dedupeKey: `dedupe-${index + 1}`,
@@ -38,19 +39,36 @@ describe("alert-feed", () => {
         updatedAt: `2026-07-04T00:00:${String(index).padStart(2, "0")}.000Z`,
       }),
     );
-    const fetchAlerts = vi.fn().mockResolvedValue(alerts);
+    const allAlerts = [
+      ...activeAlerts,
+      makeAlert({
+        id: "resolved-1",
+        dedupeKey: "dedupe-resolved-1",
+        status: "resolved",
+        updatedAt: "2026-07-04T00:01:00.000Z",
+        resolvedAt: "2026-07-04T00:01:00.000Z",
+      }),
+    ];
+    const fetchAlerts = vi
+      .fn()
+      .mockResolvedValueOnce(activeAlerts)
+      .mockResolvedValueOnce(allAlerts);
 
     const summary = await loadDashboardAlertSummary(fetchAlerts);
 
-    expect(fetchAlerts).toHaveBeenCalledWith({
+    expect(fetchAlerts).toHaveBeenNthCalledWith(1, {
       status: "active",
+      limit: DASHBOARD_ACTIVE_ALERT_FETCH_LIMIT,
+    });
+    expect(fetchAlerts).toHaveBeenNthCalledWith(2, {
       limit: DASHBOARD_ACTIVE_ALERT_FETCH_LIMIT,
     });
     expect(summary.totalActiveAlerts).toBe(11);
     expect(summary.recentAlerts).toHaveLength(DASHBOARD_RECENT_ALERT_PREVIEW_LIMIT);
+    expect(summary.recentActivity[0]?.id).toBe("resolved-1");
   });
 
-  it("keeps the dashboard recent alerts preview limited to the latest 5 alerts", () => {
+  it("keeps the dashboard recent alerts preview limited to the latest 5 active alerts", () => {
     const alerts = Array.from({ length: 7 }, (_, index) =>
       makeAlert({
         id: `alert-${index + 1}`,
@@ -71,6 +89,26 @@ describe("alert-feed", () => {
     ]);
   });
 
+  it("surfaces recent activity using the latest update time across all statuses", () => {
+    const activeAlerts = [
+      makeAlert({ id: "active-1", dedupeKey: "dedupe-active-1", updatedAt: "2026-07-04T00:00:00.000Z" }),
+    ];
+    const allAlerts = [
+      ...activeAlerts,
+      makeAlert({
+        id: "resolved-1",
+        dedupeKey: "dedupe-resolved-1",
+        status: "resolved",
+        updatedAt: "2026-07-04T00:05:00.000Z",
+        resolvedAt: "2026-07-04T00:05:00.000Z",
+      }),
+    ];
+
+    const summary = summarizeDashboardAlerts(activeAlerts, allAlerts);
+
+    expect(summary.recentActivity.map((alert) => alert.id)).toEqual(["resolved-1", "active-1"]);
+  });
+
   it("calculates dashboard severity counts from the full active alert set", () => {
     const summary = summarizeDashboardAlerts([
       makeAlert({ severity: "critical" }),
@@ -87,13 +125,14 @@ describe("alert-feed", () => {
     expect(summary.watchCount).toBe(1);
   });
 
-  it("returns zero counts and an empty recent list for an empty active alert set", () => {
+  it("returns zero counts and empty previews for an empty active alert set", () => {
     expect(summarizeDashboardAlerts([])).toEqual({
       totalActiveAlerts: 0,
       criticalCount: 0,
       warningCount: 0,
       watchCount: 0,
       recentAlerts: [],
+      recentActivity: [],
     });
   });
 
@@ -135,5 +174,14 @@ describe("alert-feed", () => {
       "warning-mid",
       "watch-newest",
     ]);
+  });
+
+  it("sorts recent activity by latest update time", () => {
+    const sorted = sortAlertsByUpdatedAt([
+      makeAlert({ id: "older", dedupeKey: "dedupe-older", updatedAt: "2026-07-04T00:00:01.000Z" }),
+      makeAlert({ id: "newer", dedupeKey: "dedupe-newer", updatedAt: "2026-07-04T00:00:09.000Z" }),
+    ]);
+
+    expect(sorted.map((alert) => alert.id)).toEqual(["newer", "older"]);
   });
 });

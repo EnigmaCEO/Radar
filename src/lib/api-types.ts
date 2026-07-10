@@ -46,18 +46,44 @@ export interface RadarAlert {
   reasonCode: string;
   visibility: RadarVisibility;
   provenance: RadarAlertProvenance;
+  signalClass?: string;
   createdAt: string;
   updatedAt: string;
   oracle?: string;
   bridge?: string;
   asset?: string;
+  assetPair?: string;
   chain?: string;
   route?: string;
+  poolName?: string;
+  objectId?: string;
   affectedProtocol?: string;
   observedValue?: string;
   expectedValue?: string;
+  thresholdName?: string;
+  observedValueLabel?: string;
+  thresholdValueLabel?: string;
+  publicSummary?: string;
+  whatHappened?: string;
+  whyItMatters?: string;
+  radarStatus?: string;
+  evidenceExplanation?: string;
+  lastSuccessfulObservationAt?: string;
+  lastObservationAttemptAt?: string;
+  consecutiveFailedCycles?: number;
+  objectState?: string;
+  failureCause?: string;
+  coverageTier?: string;
   evidenceUrl?: string;
+  openedAt?: string;
   resolvedAt?: string;
+}
+
+export interface RadarObservabilitySummary {
+  cycleAt: string;
+  totalObjects: number;
+  observedObjects: number;
+  unobservedObjects: number;
 }
 
 export interface RadarClient {

@@ -13,6 +13,28 @@
 - Overview now computes active alert totals and severity counts from the full active alert fetch set.
 - Recent alerts on Overview remain a 5-item preview and can show `Showing 5 of N active alerts`.
 - Alerts page severity-first sorting behavior is preserved through shared alert feed helpers.
+- Coverage gaps are now treated as a separate monitor-health class from findings in the dashboard UI.
+- The dashboard now accepts explicit SCE coverage fields when present: `lastSuccessfulObservationAt`, `lastObservationAttemptAt`, `consecutiveFailedCycles`, `objectState`, `failureCause`, and `coverageTier`.
+- The Overview page now shows an observability card derived from current catalog size minus active coverage-gap alerts, while waiting for a dedicated SCE cycle summary endpoint.
+
+## Coverage Gap Contract
+
+- Recommended alert-level SCE fields for monitor-health / coverage events:
+  - `signalClass: "coverage"`
+  - `lastSuccessfulObservationAt`
+  - `lastObservationAttemptAt`
+  - `consecutiveFailedCycles`
+  - `objectState` such as `unknown`
+  - `failureCause` such as `status_source_unavailable`
+  - `coverageTier` such as `unresolved`, `coverage_warning`, or `coverage_critical`
+- Recommended summary-level SCE endpoint shape for honest coverage reporting on Overview:
+  - `cycleAt`
+  - `totalObjects`
+  - `observedObjects`
+  - `unobservedObjects`
+- Recommended separation of concerns:
+  - alert-level coverage facts belong on `/v1/sce/radar/alerts` and `/v1/sce/radar/alert-ledger`
+  - cycle-level observability totals belong on a dedicated summary endpoint, not inferred from the alert list
 
 ## Delivery Modes
 

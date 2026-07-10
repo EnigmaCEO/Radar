@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, Bell, Eye } from "lucide-react";
 import { useAccount } from "@/lib/account-context";
-import { listAlerts } from "@/lib/api";
+import { getRadarCatalog, listAlerts } from "@/lib/api";
+import { isCoverageGapAlert } from "@/lib/alert-classification";
 import {
   EMPTY_DASHBOARD_ALERT_SUMMARY,
   loadDashboardAlertSummary,
 } from "@/lib/alert-feed";
+import { formatAlertLifecycle } from "@/lib/alert-time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,33 +22,96 @@ function SeverityBadge({ severity }: { severity: string }) {
   return <Badge variant={variant as "critical" | "warning" | "watch"}>{severity}</Badge>;
 }
 
+function StatusBadge({ status }: { status: string }) {
+  const className =
+    status === "resolved"
+      ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+      : status === "superseded"
+        ? "border border-slate-500/20 bg-slate-500/10 text-slate-300"
+        : "border border-primary/20 bg-primary/10 text-primary";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${className}`}>{status}</span>
+  );
+}
+
+type ObservabilityState = {
+  totalObjects: number;
+  observableObjects: number;
+  activeCoverageGaps: number;
+} | null;
+
 export default function DashboardPage() {
   const { account } = useAccount();
   const [alertSummary, setAlertSummary] = useState(EMPTY_DASHBOARD_ALERT_SUMMARY);
+  const [observability, setObservability] = useState<ObservabilityState>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadDashboardAlertSummary(listAlerts)
-      .then(setAlertSummary)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    void Promise.allSettled([
+      loadDashboardAlertSummary(listAlerts),
+      getRadarCatalog(),
+      listAlerts({
+        status: "active",
+        limit: 200,
+      }),
+    ])
+      .then(([summaryResult, catalogResult, activeAlertsResult]) => {
+        if (cancelled) return;
+
+        if (summaryResult.status === "fulfilled") {
+          setAlertSummary(summaryResult.value);
+        }
+
+        if (
+          catalogResult.status === "fulfilled" &&
+          activeAlertsResult.status === "fulfilled"
+        ) {
+          const activeCoverageGaps = activeAlertsResult.value.filter((alert) =>
+            isCoverageGapAlert(alert),
+          ).length;
+          setObservability({
+            totalObjects: catalogResult.value.objects.length,
+            observableObjects: Math.max(
+              0,
+              catalogResult.value.objects.length - activeCoverageGaps,
+            ),
+            activeCoverageGaps,
+          });
+        } else {
+          setObservability(null);
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!cancelled) setObservability(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const { criticalCount, recentAlerts, totalActiveAlerts, warningCount, watchCount } = alertSummary;
+  const { criticalCount, recentActivity, totalActiveAlerts, warningCount, watchCount } =
+    alertSummary;
 
-  if (loading) return <div className="text-muted-foreground text-sm">Loading...</div>;
+  if (loading) return <div className="text-sm text-muted-foreground">Loading...</div>;
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="max-w-5xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Overview</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          {account.name || "Your account"} ·{" "}
+        <p className="mt-1 text-sm text-muted-foreground">
+          {account.name || "Your account"} -{" "}
           <span className="font-medium capitalize">{account.plan.replace("_", " ")}</span>
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -55,16 +120,30 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{totalActiveAlerts}</div>
-            <div className="flex gap-2 mt-1">
-              {criticalCount > 0 && (
-                <span className="text-xs text-red-500">{criticalCount} critical</span>
-              )}
-              {warningCount > 0 && (
-                <span className="text-xs text-orange-500">{warningCount} warning</span>
-              )}
-              {watchCount > 0 && (
-                <span className="text-xs text-yellow-500">{watchCount} watch</span>
-              )}
+            <div className="mt-1 flex gap-2">
+              {criticalCount > 0 && <span className="text-xs text-red-500">{criticalCount} critical</span>}
+              {warningCount > 0 && <span className="text-xs text-orange-500">{warningCount} warning</span>}
+              {watchCount > 0 && <span className="text-xs text-yellow-500">{watchCount} watch</span>}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Observability
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {observability ? `${observability.observableObjects}/${observability.totalObjects}` : "n/a"}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {observability
+                ? `${observability.activeCoverageGaps} active coverage gap${
+                    observability.activeCoverageGaps === 1 ? "" : "s"
+                  }`
+                : "Catalog coverage unavailable"}
             </div>
           </CardContent>
         </Card>
@@ -75,7 +154,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold capitalize">{account.plan.replace("_", " ")}</div>
-            <div className="text-xs text-muted-foreground mt-1 capitalize">{account.status}</div>
+            <div className="mt-1 text-xs capitalize text-muted-foreground">{account.status}</div>
           </CardContent>
         </Card>
 
@@ -95,7 +174,7 @@ export default function DashboardPage() {
                     ? 7
                     : 1}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">days</div>
+            <div className="mt-1 text-xs text-muted-foreground">days</div>
           </CardContent>
         </Card>
       </div>
@@ -128,13 +207,13 @@ export default function DashboardPage() {
             <Card className="border-violet-600/40 bg-violet-600/5">
               <CardContent className="flex items-center justify-between pt-6">
                 <div>
-                  <p className="font-medium text-sm">{title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                  <p className="text-sm font-medium">{title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>
                 </div>
                 {next === "managed" ? (
                   <Button
                     size="sm"
-                    className="bg-violet-600 hover:bg-violet-700 text-white"
+                    className="bg-violet-600 text-white hover:bg-violet-700"
                     asChild
                   >
                     <a href="mailto:radar@sagitta.systems?subject=Radar Managed Plan">
@@ -144,7 +223,7 @@ export default function DashboardPage() {
                 ) : (
                   <Button
                     size="sm"
-                    className="bg-violet-600 hover:bg-violet-700 text-white"
+                    className="bg-violet-600 text-white hover:bg-violet-700"
                     onClick={async () => {
                       const res = await fetch("/api/stripe/checkout", {
                         method: "POST",
@@ -164,14 +243,12 @@ export default function DashboardPage() {
         })()}
 
       <div>
-        <div className="flex items-center justify-between mb-3 gap-4">
+        <div className="mb-3 flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-semibold">Recent alerts</h2>
-            {totalActiveAlerts > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {recentAlerts.length < totalActiveAlerts
-                  ? `Showing ${recentAlerts.length} of ${totalActiveAlerts} active alerts`
-                  : `Showing all ${totalActiveAlerts} active alerts`}
+            <h2 className="font-semibold">Recent alert activity</h2>
+            {recentActivity.length > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Showing the latest openings and recoveries across your visible history
               </p>
             )}
           </div>
@@ -181,35 +258,41 @@ export default function DashboardPage() {
             </Link>
           </Button>
         </div>
-        {totalActiveAlerts === 0 ? (
+        {recentActivity.length === 0 ? (
           <Card className="border-border/60">
             <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              No active alerts - all infrastructure is healthy.
+              No alert activity is visible in your current history window.
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-2">
-            {recentAlerts.map((alert) => (
+            {recentActivity.map((alert) => (
               <Card key={alert.id} className="border-border/60">
-                <CardContent className="py-3 px-4 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
+                <CardContent className="flex items-center justify-between gap-4 px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <AlertTriangle
                       className={`h-4 w-4 shrink-0 ${
-                        alert.severity === "critical"
-                          ? "text-red-500"
-                          : alert.severity === "warning"
-                            ? "text-orange-500"
-                            : "text-yellow-500"
+                        isCoverageGapAlert(alert)
+                          ? "text-slate-300"
+                          : alert.severity === "critical"
+                            ? "text-red-500"
+                            : alert.severity === "warning"
+                              ? "text-orange-500"
+                              : "text-yellow-500"
                       }`}
                     />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{alert.summary}</p>
+                      <p className="truncate text-sm font-medium">{alert.summary}</p>
                       <p className="text-xs text-muted-foreground">
-                        {alert.monitorType} · {formatDate(alert.createdAt)}
+                        {isCoverageGapAlert(alert) ? "coverage gap" : alert.monitorType} -{" "}
+                        {formatDate(alert.openedAt ?? alert.createdAt)} - {formatAlertLifecycle(alert)}
                       </p>
                     </div>
                   </div>
-                  <SeverityBadge severity={alert.severity} />
+                  <div className="flex items-center gap-2">
+                    {!isCoverageGapAlert(alert) && <SeverityBadge severity={alert.severity} />}
+                    <StatusBadge status={alert.status} />
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -218,9 +301,9 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Card className="border-border/60 hover:border-violet-600/40 transition-colors">
+        <Card className="border-border/60 transition-colors hover:border-violet-600/40">
           <Link href="/dashboard/watchlists">
-            <CardContent className="flex items-center gap-3 pt-4 pb-4">
+            <CardContent className="flex items-center gap-3 pb-4 pt-4">
               <Eye className="h-5 w-5 text-violet-500" />
               <div>
                 <p className="text-sm font-medium">Manage watchlists</p>
@@ -229,9 +312,9 @@ export default function DashboardPage() {
             </CardContent>
           </Link>
         </Card>
-        <Card className="border-border/60 hover:border-violet-600/40 transition-colors">
+        <Card className="border-border/60 transition-colors hover:border-violet-600/40">
           <Link href="/dashboard/destinations">
-            <CardContent className="flex items-center gap-3 pt-4 pb-4">
+            <CardContent className="flex items-center gap-3 pb-4 pt-4">
               <Bell className="h-5 w-5 text-violet-500" />
               <div>
                 <p className="text-sm font-medium">Delivery destinations</p>

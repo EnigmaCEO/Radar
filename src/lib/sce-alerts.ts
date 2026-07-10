@@ -35,6 +35,14 @@ export interface SceAlert {
   thresholdName?: string | null;
   observedValueLabel?: string | null;
   thresholdValueLabel?: string | null;
+  lastSuccessfulObservationAt?: string | null;
+  lastObservationAttemptAt?: string | null;
+  consecutiveFailedCycles?: number | null;
+  objectState?: string | null;
+  failureCause?: string | null;
+  coverageTier?: string | null;
+  openedAt?: string | null;
+  resolvedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -79,6 +87,12 @@ export interface SceAlertLedgerEvent {
   thresholdName: string | null;
   observedValueLabel: string | null;
   thresholdValueLabel: string | null;
+  lastSuccessfulObservationAt?: string | null;
+  lastObservationAttemptAt?: string | null;
+  consecutiveFailedCycles?: number | null;
+  objectState?: string | null;
+  failureCause?: string | null;
+  coverageTier?: string | null;
 }
 
 function firstString(...values: unknown[]): string | null {
@@ -126,6 +140,15 @@ function toStringArray(value: unknown): string[] {
     : [];
 }
 
+function normalizeInteger(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+  }
+  return null;
+}
+
 function normalizeSeverity(value: unknown): string {
   const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (normalized === "warn") return "warning";
@@ -170,6 +193,10 @@ function sanitizeAlert(raw: Record<string, unknown>): SceAlert | null {
       ),
     ) ??
     createdAt;
+  const openedAt = normalizeDateString(
+    firstString(raw.openedAt, raw.opened_at, raw.sourceAlertCreatedAt, raw.source_alert_created_at),
+  );
+  const resolvedAt = normalizeDateString(firstString(raw.resolvedAt, raw.resolved_at));
   const evidenceSummary =
     firstString(raw.evidenceSummary, raw.evidence_summary) ??
     firstStringFromSources(getAlertFieldSources(raw), "summary");
@@ -205,6 +232,20 @@ function sanitizeAlert(raw: Record<string, unknown>): SceAlert | null {
     thresholdName: readExplanationField(raw, "thresholdName", "threshold_name"),
     observedValueLabel: readExplanationField(raw, "observedValueLabel", "observed_value_label"),
     thresholdValueLabel: readExplanationField(raw, "thresholdValueLabel", "threshold_value_label"),
+    lastSuccessfulObservationAt: normalizeDateString(
+      firstString(raw.lastSuccessfulObservationAt, raw.last_successful_observation_at),
+    ),
+    lastObservationAttemptAt: normalizeDateString(
+      firstString(raw.lastObservationAttemptAt, raw.last_observation_attempt_at),
+    ),
+    consecutiveFailedCycles: normalizeInteger(
+      raw.consecutiveFailedCycles ?? raw.consecutive_failed_cycles,
+    ),
+    objectState: firstString(raw.objectState, raw.object_state),
+    failureCause: firstString(raw.failureCause, raw.failure_cause),
+    coverageTier: firstString(raw.coverageTier, raw.coverage_tier),
+    openedAt,
+    resolvedAt,
     createdAt,
     updatedAt,
   };
@@ -302,6 +343,18 @@ function sanitizeLedgerEvent(raw: Record<string, unknown>): SceAlertLedgerEvent 
     thresholdName: explanationField("thresholdName", "threshold_name"),
     observedValueLabel: explanationField("observedValueLabel", "observed_value_label"),
     thresholdValueLabel: explanationField("thresholdValueLabel", "threshold_value_label"),
+    lastSuccessfulObservationAt: normalizeDateString(
+      firstString(raw.lastSuccessfulObservationAt, raw.last_successful_observation_at),
+    ),
+    lastObservationAttemptAt: normalizeDateString(
+      firstString(raw.lastObservationAttemptAt, raw.last_observation_attempt_at),
+    ),
+    consecutiveFailedCycles: normalizeInteger(
+      raw.consecutiveFailedCycles ?? raw.consecutive_failed_cycles,
+    ),
+    objectState: firstString(raw.objectState, raw.object_state),
+    failureCause: firstString(raw.failureCause, raw.failure_cause),
+    coverageTier: firstString(raw.coverageTier, raw.coverage_tier),
   };
 }
 

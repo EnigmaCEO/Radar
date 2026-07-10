@@ -7,6 +7,7 @@ import type {
   RadarWatchlist,
   SaasMeResponse,
 } from "./api-types";
+import type { SceCatalogResponse } from "./sce-catalog-types";
 import { stripTrailingSlash } from "./utils";
 
 const API_BASE = stripTrailingSlash(
@@ -110,6 +111,10 @@ export async function listAlerts(params?: {
 
 export async function getAlert(id: string): Promise<RadarAlert> {
   return request<RadarAlert>(`/v1/sce/radar/alerts/${id}`);
+}
+
+export async function getRadarCatalog(): Promise<SceCatalogResponse> {
+  return requestSameOrigin<SceCatalogResponse>("/api/radar/catalog");
 }
 
 // ── Clients ───────────────────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ export interface DashboardAlertSummary {
   warningCount: number;
   watchCount: number;
   recentAlerts: RadarAlert[];
+  recentActivity: RadarAlert[];
 }
 
 export const EMPTY_DASHBOARD_ALERT_SUMMARY: DashboardAlertSummary = {
@@ -30,6 +31,7 @@ export const EMPTY_DASHBOARD_ALERT_SUMMARY: DashboardAlertSummary = {
   warningCount: 0,
   watchCount: 0,
   recentAlerts: [],
+  recentActivity: [],
 };
 
 export function sortAlertsNewestFirst(alerts: RadarAlert[]): RadarAlert[] {
@@ -46,23 +48,43 @@ export function sortAlertsBySeverityAndCreatedAt(alerts: RadarAlert[]): RadarAle
   });
 }
 
-export function summarizeDashboardAlerts(alerts: RadarAlert[]): DashboardAlertSummary {
+export function sortAlertsByUpdatedAt(alerts: RadarAlert[]): RadarAlert[] {
+  return [...alerts].sort((a, b) => {
+    const timeDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
+
+export function summarizeDashboardAlerts(
+  activeAlerts: RadarAlert[],
+  allAlerts: RadarAlert[] = activeAlerts,
+): DashboardAlertSummary {
   return {
-    totalActiveAlerts: alerts.length,
-    criticalCount: alerts.filter((alert) => alert.severity === "critical").length,
-    warningCount: alerts.filter((alert) => alert.severity === "warning").length,
-    watchCount: alerts.filter((alert) => alert.severity === "watch").length,
-    recentAlerts: sortAlertsBySeverityAndCreatedAt(alerts).slice(0, DASHBOARD_RECENT_ALERT_PREVIEW_LIMIT),
+    totalActiveAlerts: activeAlerts.length,
+    criticalCount: activeAlerts.filter((alert) => alert.severity === "critical").length,
+    warningCount: activeAlerts.filter((alert) => alert.severity === "warning").length,
+    watchCount: activeAlerts.filter((alert) => alert.severity === "watch").length,
+    recentAlerts: sortAlertsBySeverityAndCreatedAt(activeAlerts).slice(
+      0,
+      DASHBOARD_RECENT_ALERT_PREVIEW_LIMIT,
+    ),
+    recentActivity: sortAlertsByUpdatedAt(allAlerts).slice(0, DASHBOARD_RECENT_ALERT_PREVIEW_LIMIT),
   };
 }
 
 export async function loadDashboardAlertSummary(
   fetchAlerts: AlertFetcher,
 ): Promise<DashboardAlertSummary> {
-  const alerts = await fetchAlerts({
-    status: "active",
-    limit: DASHBOARD_ACTIVE_ALERT_FETCH_LIMIT,
-  });
+  const [activeAlerts, allAlerts] = await Promise.all([
+    fetchAlerts({
+      status: "active",
+      limit: DASHBOARD_ACTIVE_ALERT_FETCH_LIMIT,
+    }),
+    fetchAlerts({
+      limit: DASHBOARD_ACTIVE_ALERT_FETCH_LIMIT,
+    }),
+  ]);
 
-  return summarizeDashboardAlerts(alerts);
+  return summarizeDashboardAlerts(activeAlerts, allAlerts);
 }

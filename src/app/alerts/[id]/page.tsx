@@ -1,6 +1,12 @@
 import { notFound } from "next/navigation";
 import { Footer } from "@/components/footer";
 import { Nav } from "@/components/nav";
+import {
+  coverageGapBadgeLabel,
+  getCoverageGapTier,
+  isCoverageGapAlert,
+} from "@/lib/alert-classification";
+import { formatDurationBetween } from "@/lib/alert-time";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchSceAlertById } from "@/lib/sce-alerts";
@@ -55,6 +61,21 @@ export default async function PublicAlertDetailPage({
   }
 
   const rows = detailRows(alert);
+  const isCoverageGap = isCoverageGapAlert({
+    signalClass: alert.signalClass,
+    reasonCode: alert.reasonCode,
+    summary: alert.publicSummary ?? alert.summary,
+    openedAt: alert.openedAt ?? undefined,
+    createdAt: alert.createdAt,
+  });
+  const coverageTier = getCoverageGapTier({
+    signalClass: alert.signalClass,
+    reasonCode: alert.reasonCode,
+    summary: alert.publicSummary ?? alert.summary,
+    openedAt: alert.openedAt ?? undefined,
+    createdAt: alert.createdAt,
+    coverageTier: alert.coverageTier,
+  });
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -63,7 +84,11 @@ export default async function PublicAlertDetailPage({
         <div className="mx-auto max-w-4xl space-y-6 px-4 sm:px-6">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={severityVariant(alert.severity)}>{alert.severity}</Badge>
+              {isCoverageGap ? (
+                <Badge variant="secondary">{coverageGapBadgeLabel(coverageTier)}</Badge>
+              ) : (
+                <Badge variant={severityVariant(alert.severity)}>{alert.severity}</Badge>
+              )}
               <Badge variant="secondary">{alert.status}</Badge>
               <Badge variant="secondary">{alert.monitorType}</Badge>
             </div>
@@ -74,6 +99,33 @@ export default async function PublicAlertDetailPage({
               </h1>
             </div>
           </div>
+
+          {isCoverageGap && (
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle className="text-base">Coverage gap</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                <p>Radar could not observe this object, so object state is currently unknown.</p>
+                {alert.failureCause && <p>Cause: {alert.failureCause.replace(/_/g, " ")}</p>}
+                {alert.lastSuccessfulObservationAt && (
+                  <p>
+                    Last successful observation: {formatDateTime(alert.lastSuccessfulObservationAt)} (
+                    {formatDurationBetween(alert.lastSuccessfulObservationAt)} ago)
+                  </p>
+                )}
+                {alert.consecutiveFailedCycles !== null &&
+                  alert.consecutiveFailedCycles !== undefined && (
+                    <p>Consecutive failed cycles: {alert.consecutiveFailedCycles}</p>
+                  )}
+                <p>
+                  Open duration:{" "}
+                  {formatDurationBetween(alert.openedAt ?? alert.createdAt, alert.resolvedAt ?? new Date())}
+                </p>
+                <p>Object state: {alert.objectState ?? "unknown"}</p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-border/60">
             <CardHeader>
