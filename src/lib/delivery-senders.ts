@@ -33,10 +33,19 @@ export interface DeliveryPreviewMessage {
   warning?: string;
 }
 
+export interface AnnouncementFeedAlert extends SceAlert {
+  eventId?: string | null;
+  eventType?: string | null;
+  sourceAlertUpdatedAt?: string | null;
+}
+
 const DISCORD_EMBED_LIMIT = 10;
 const TELEGRAM_TEXT_LIMIT = 3500;
 const DIGEST_TOP_ALERT_LIMIT = 5;
 const PREVIEW_TEXT_LIMIT = 4000;
+const ANNOUNCEMENT_HASHTAG_LIMIT = 6;
+const ANNOUNCEMENT_CASHTAG_LIMIT = 4;
+const ANNOUNCEMENT_QUOTE_TOKEN_DENYLIST = new Set(["USD"]);
 
 function severityColor(severity: string): number {
   switch (severity) {
@@ -47,6 +56,364 @@ function severityColor(severity: string): number {
     default:
       return 0xeab308;
   }
+}
+
+function firstString(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
+function titleCase(value: string): string {
+  return value
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter((part) => part.length > 0)
+    .map((part) => part[0].toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function sanitizeHashtagToken(value: string): string | null {
+  const cleaned = value.replace(/[^A-Za-z0-9]+/g, "");
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function sanitizeCashtagToken(value: string): string | null {
+  const cleaned = value.toUpperCase().replace(/[^A-Z0-9]+/g, "");
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function dedupeTokens(values: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const value of values) {
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(value);
+  }
+  return unique;
+}
+
+function monitorTypeLabel(monitorType: string): string {
+  switch (monitorType.trim().toLowerCase()) {
+    case "lp":
+      return "LP";
+    case "sce_heartbeat":
+      return "Infrastructure";
+    default:
+      return titleCase(monitorType);
+  }
+}
+
+function severityLabel(severity: string): string {
+  switch (severity.trim().toLowerCase()) {
+    case "critical":
+      return "Critical";
+    case "warning":
+      return "Warning";
+    case "watch":
+      return "Watch";
+    default:
+      return "Alert";
+  }
+}
+
+function announcementBanner(severity: string): string {
+  switch (severity.trim().toLowerCase()) {
+    case "critical":
+      return "🔴 Radar Alert";
+    case "warning":
+      return "🟠 Radar Warning";
+    default:
+      return "🟡 Radar Watch";
+  }
+}
+
+function announcementMonitorHashtag(monitorType: string): string {
+  switch (monitorType.trim().toLowerCase()) {
+    case "oracle":
+      return "OracleAlert";
+    case "lp":
+      return "LPAlert";
+    case "bridge":
+      return "BridgeAlert";
+    case "governance":
+      return "GovernanceAlert";
+    case "dependency":
+      return "DependencyAlert";
+    case "sce_heartbeat":
+      return "InfrastructureAlert";
+    default:
+      return `${monitorTypeLabel(monitorType).replace(/[^A-Za-z0-9]+/g, "")}Alert`;
+  }
+}
+
+function extractAssetSymbols(alert: AnnouncementFeedAlert): string[] {
+  const raw = [alert.assetPair, alert.asset]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .flatMap((value) => value.split(/[^A-Za-z0-9]+/g))
+    .map((value) => sanitizeCashtagToken(value))
+    .filter((value): value is string => value !== null && !ANNOUNCEMENT_QUOTE_TOKEN_DENYLIST.has(value));
+  return dedupeTokens(raw).slice(0, ANNOUNCEMENT_CASHTAG_LIMIT);
+}
+
+function formatAnnouncementAssetDisplay(alert: AnnouncementFeedAlert): string | null {
+  const source = firstString(alert.assetPair, alert.asset);
+  if (!source) return null;
+  const symbols = source
+    .split(/[^A-Za-z0-9]+/g)
+    .map((value) => sanitizeCashtagToken(value))
+    .filter((value): value is string => value !== null);
+  if (symbols.length === 0) return null;
+  if (symbols.length === 1) return `$${symbols[0]}`;
+  const [base, quote] = symbols;
+  return quote === "USD" ? `$${base}/USD` : `$${base}/$${quote}`;
+}
+
+function buildAnnouncementTags(alert: AnnouncementFeedAlert): {
+  hashtags: string[];
+  cashtags: string[];
+} {
+  const hashtags = dedupeTokens(
+    [
+      "RadarAlert",
+      announcementMonitorHashtag(alert.monitorType),
+      "DeFiRisk",
+      "CryptoAlerts",
+      sanitizeHashtagToken(firstString(alert.provider) ?? ""),
+      sanitizeHashtagToken(firstString(alert.chain) ?? ""),
+    ].filter((value): value is string => typeof value === "string" && value.length > 0),
+  )
+    .slice(0, ANNOUNCEMENT_HASHTAG_LIMIT)
+    .map((value) => `#${value}`);
+  const cashtags = extractAssetSymbols(alert).map((value) => `$${value}`);
+  return { hashtags, cashtags };
+}
+
+function buildAnnouncementDetailsUrl(alertId: string): string {
+  const baseUrl = (process.env.RADAR_PUBLIC_BASE_URL ?? "https://radar.sagitta.systems").trim();
+  return `${baseUrl.replace(/\/+$/, "")}/alerts/${encodeURIComponent(alertId)}`;
+}
+
+function cleanAnnouncementMetricValue(value: string | null | undefined): string | null {
+  const trimmed = firstString(value);
+  if (!trimmed) return null;
+  return trimmed
+    .replace(/^Observed\s+/i, "")
+    .replace(/^Threshold:\s*/i, "")
+    .replace(/^[A-Za-z _-]+:\s*/i, "")
+    .trim();
+}
+
+function announcementMetricLabels(alert: AnnouncementFeedAlert): {
+  observedLabel: string;
+  thresholdLabel: string;
+} {
+  switch (alert.reasonCode.trim().toUpperCase()) {
+    case "ORACLE_STALE":
+      return {
+        observedLabel: "Feed age",
+        thresholdLabel: `${severityLabel(alert.severity)} threshold`,
+      };
+    case "ORACLE_REFERENCE_DEVIATION":
+      return {
+        observedLabel: "Deviation",
+        thresholdLabel: `${severityLabel(alert.severity)} threshold`,
+      };
+    case "LP_POOL_IMBALANCE":
+      return {
+        observedLabel: "Imbalance",
+        thresholdLabel: `${severityLabel(alert.severity)} threshold`,
+      };
+    case "BRIDGE_ROUTE_LATENCY":
+    case "BRIDGE_ROUTE_DELAYED":
+      return {
+        observedLabel: "Route delay",
+        thresholdLabel: `${severityLabel(alert.severity)} threshold`,
+      };
+    default:
+      return {
+        observedLabel: "Observed",
+        thresholdLabel: `${severityLabel(alert.severity)} threshold`,
+      };
+  }
+}
+
+function fallbackAnnouncementExplanation(alert: AnnouncementFeedAlert): string {
+  switch (alert.reasonCode.trim().toUpperCase()) {
+    case "ORACLE_STALE":
+      return "The price feed is out of date; caution is advised until it updates.";
+    case "LP_POOL_IMBALANCE":
+      return "Pool balance concentration crossed Radar's threshold.";
+    case "BRIDGE_ROUTE_LATENCY":
+    case "BRIDGE_ROUTE_DELAYED":
+      return "Route latency crossed Radar's threshold and is being monitored.";
+    default:
+      return "Radar is tracking an active infrastructure condition from SCE.";
+  }
+}
+
+function fallbackAnnouncementStatus(alert: AnnouncementFeedAlert): string {
+  switch (alert.reasonCode.trim().toUpperCase()) {
+    case "LP_POOL_IMBALANCE":
+      return "Watching for normalization.";
+    case "ORACLE_STALE":
+      return "Monitoring for update or resolution.";
+    default:
+      return "Monitoring for update or resolution.";
+  }
+}
+
+function announcementProviderLabel(provider: string): string {
+  const trimmed = provider.trim();
+  if (trimmed.length === 0) return "Unknown provider";
+  if (/[A-Z]/.test(trimmed)) return trimmed;
+  return titleCase(trimmed);
+}
+
+function buildAnnouncementTitle(alert: AnnouncementFeedAlert): string {
+  const providerToken = sanitizeHashtagToken(announcementProviderLabel(alert.provider));
+  const chainToken = sanitizeHashtagToken(firstString(alert.chain) ?? "");
+  const parts = [
+    `${monitorTypeLabel(alert.monitorType)} ${severityLabel(alert.severity)}`,
+    providerToken ? `#${providerToken}` : announcementProviderLabel(alert.provider),
+    formatAnnouncementAssetDisplay(alert),
+    chainToken ? `on #${chainToken}` : firstString(alert.chain),
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
+  return parts.join(" - ").replace(" - on #", " on #");
+}
+
+function buildAnnouncementExplanation(alert: AnnouncementFeedAlert): string {
+  return (
+    firstString(
+      alert.whatHappened,
+      alert.severityExplanation,
+      alert.whyItMatters,
+      alert.publicSummary,
+      alert.summary,
+    ) ?? fallbackAnnouncementExplanation(alert)
+  );
+}
+
+function buildAnnouncementText(alert: AnnouncementFeedAlert): string {
+  const { hashtags, cashtags } = buildAnnouncementTags(alert);
+  const { observedLabel, thresholdLabel } = announcementMetricLabels(alert);
+  const observedValue =
+    cleanAnnouncementMetricValue(alert.observedValueLabel) ?? "not provided by SCE";
+  const thresholdValue =
+    cleanAnnouncementMetricValue(alert.thresholdValueLabel) ?? "not provided by SCE";
+  const detailsUrl = buildAnnouncementDetailsUrl(alert.id);
+
+  return [
+    announcementBanner(alert.severity),
+    "",
+    buildAnnouncementTitle(alert),
+    "",
+    buildAnnouncementExplanation(alert),
+    "",
+    `${observedLabel}: ${observedValue}`,
+    `${thresholdLabel}: ${thresholdValue}`,
+    "",
+    `Status: ${firstString(alert.radarStatus) ?? fallbackAnnouncementStatus(alert)}`,
+    `Details: ${detailsUrl}`,
+    "",
+    [...hashtags, ...cashtags].join(" "),
+  ].join("\n");
+}
+
+function buildAnnouncementDiscordEmbed(
+  alert: AnnouncementFeedAlert,
+): Record<string, unknown> {
+  const { hashtags, cashtags } = buildAnnouncementTags(alert);
+  const { observedLabel, thresholdLabel } = announcementMetricLabels(alert);
+  return {
+    title: announcementBanner(alert.severity),
+    description: `${buildAnnouncementTitle(alert)}\n\n${buildAnnouncementExplanation(alert)}`,
+    color: severityColor(alert.severity),
+    fields: [
+      {
+        name: observedLabel,
+        value: cleanAnnouncementMetricValue(alert.observedValueLabel) ?? "not provided by SCE",
+        inline: true,
+      },
+      {
+        name: thresholdLabel,
+        value: cleanAnnouncementMetricValue(alert.thresholdValueLabel) ?? "not provided by SCE",
+        inline: true,
+      },
+      {
+        name: "Status",
+        value: firstString(alert.radarStatus) ?? fallbackAnnouncementStatus(alert),
+        inline: false,
+      },
+      {
+        name: "Details",
+        value: buildAnnouncementDetailsUrl(alert.id),
+        inline: false,
+      },
+      {
+        name: "Tags",
+        value: [...hashtags, ...cashtags].join(" "),
+        inline: false,
+      },
+    ],
+    footer: { text: "radar.sagitta.systems" },
+    timestamp: alert.sourceAlertUpdatedAt ?? alert.updatedAt,
+  };
+}
+
+function buildAnnouncementWebhookPayload(
+  alert: AnnouncementFeedAlert,
+  meta: SituationalBriefingMeta,
+): Record<string, unknown> {
+  const { hashtags, cashtags } = buildAnnouncementTags(alert);
+  const { observedLabel, thresholdLabel } = announcementMetricLabels(alert);
+  return {
+    source: "radar.sagitta.systems",
+    type: "announcement_feed_delivery",
+    deliveryMode: "announcement_feed",
+    window: meta.window,
+    windowStart: meta.windowStart,
+    windowEnd: meta.windowEnd,
+    generatedAt: new Date().toISOString(),
+    alertId: alert.id,
+    eventId: alert.eventId ?? null,
+    eventType: alert.eventType ?? null,
+    sourceAlertUpdatedAt: alert.sourceAlertUpdatedAt ?? alert.updatedAt,
+    severity: alert.severity,
+    status: alert.status,
+    monitorType: alert.monitorType,
+    provider: alert.provider,
+    chain: alert.chain,
+    object: {
+      asset: alert.asset,
+      assetPair: alert.assetPair ?? null,
+      route: alert.route,
+      poolName: alert.poolName ?? null,
+      objectId: alert.objectId,
+      objectType: alert.objectType ?? null,
+    },
+    explanation: buildAnnouncementExplanation(alert),
+    observed: {
+      label: observedLabel,
+      value: cleanAnnouncementMetricValue(alert.observedValueLabel) ?? "not provided by SCE",
+    },
+    thresholdCrossed: {
+      label: thresholdLabel,
+      value: cleanAnnouncementMetricValue(alert.thresholdValueLabel) ?? "not provided by SCE",
+      thresholdName: alert.thresholdName ?? null,
+    },
+    statusText: firstString(alert.radarStatus) ?? fallbackAnnouncementStatus(alert),
+    detailsUrl: buildAnnouncementDetailsUrl(alert.id),
+    hashtags,
+    cashtags,
+    tags: [...hashtags, ...cashtags],
+    telegramText: buildAnnouncementText(alert),
+  };
 }
 
 function alertLine(alert: {
@@ -404,6 +771,46 @@ export function buildDigestWebhookPayload(
   };
 }
 
+export function buildAnnouncementPreviewMessages(
+  channel: "webhook" | "discord_webhook" | "telegram_bot",
+  alerts: AnnouncementFeedAlert[],
+  meta: SituationalBriefingMeta,
+): DeliveryPreviewMessage[] {
+  if (channel === "webhook") {
+    return alerts.map((alert, index) =>
+      makeStructuredPreviewMessage(
+        "webhook_json",
+        buildAnnouncementWebhookPayload(alert, meta),
+        index,
+        "json",
+        "announcement_feed_delivery",
+      ),
+    );
+  }
+  if (channel === "discord_webhook") {
+    return alerts.map((alert, index) =>
+      makeStructuredPreviewMessage(
+        "discord_embed",
+        buildAnnouncementDiscordEmbed(alert),
+        index,
+        "embed",
+      ),
+    );
+  }
+  return alerts.map((alert, index) => {
+    const sourceText = buildAnnouncementText(alert);
+    const deliveredText = truncateTelegramText(sourceText);
+    return makeTextPreviewMessage("telegram_text", deliveredText, index, undefined, {
+      sourceCharacterCount: sourceText.length,
+      deliveryTruncated: deliveredText !== sourceText,
+      deliveryWarning:
+        deliveredText !== sourceText
+          ? "Announcement feed post truncated for Telegram delivery."
+          : undefined,
+    });
+  });
+}
+
 export function buildDiscordEmbeds(alerts: SceAlert[], meta?: SituationalBriefingMeta) {
   const colors = getEmbedColors(alerts, meta);
   return buildSituationalBriefingDiscordEmbeds(alerts, meta)
@@ -569,6 +976,14 @@ export function buildPublicThreadPreviewMessages(
   });
 }
 
+export async function sendWebhookPosts(url: string, payloads: unknown[]): Promise<SendResult> {
+  for (const payload of payloads) {
+    const result = await sendWebhook(url, payload);
+    if (!result.ok) return result;
+  }
+  return { ok: true };
+}
+
 export async function sendWebhook(url: string, payload: unknown): Promise<SendResult> {
   try {
     const res = await fetch(url, {
@@ -591,6 +1006,27 @@ export async function sendDiscordEmbeds(webhookUrl: string, embeds: unknown[]): 
       body: JSON.stringify({ embeds }),
     });
     if (!res.ok) return { ok: false, sanitizedError: `Discord webhook returned ${res.status}` };
+    return { ok: true };
+  } catch {
+    return { ok: false, sanitizedError: "Discord webhook unreachable" };
+  }
+}
+
+export async function sendDiscordEmbedPosts(
+  webhookUrl: string,
+  embeds: unknown[],
+): Promise<SendResult> {
+  try {
+    for (const embed of embeds) {
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ embeds: [embed] }),
+      });
+      if (!res.ok) {
+        return { ok: false, sanitizedError: `Discord webhook returned ${res.status}` };
+      }
+    }
     return { ok: true };
   } catch {
     return { ok: false, sanitizedError: "Discord webhook unreachable" };
@@ -629,7 +1065,10 @@ async function postTelegramMessage(chatId: string, text: string): Promise<SendRe
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text }),
     });
-    const data = await res.json().catch(() => ({}) as Record<string, unknown>);
+    const data = (await res
+      .json()
+      .then((value) => (typeof value === "object" && value !== null ? value : {}))
+      .catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok || !data.ok) {
       const description = typeof data.description === "string" ? data.description : `Telegram returned ${res.status}`;
       return { ok: false, sanitizedError: sanitizeTelegramDescription(description) };
@@ -657,4 +1096,11 @@ export async function sendTelegramTextPosts(chatId: string, posts: string[]): Pr
   return { ok: true, externalIds: externalIds.length > 0 ? externalIds : undefined };
 }
 
-export { alertLine };
+export {
+  alertLine,
+  buildAnnouncementDetailsUrl,
+  buildAnnouncementDiscordEmbed,
+  buildAnnouncementTags,
+  buildAnnouncementText as buildAnnouncementTelegramText,
+  buildAnnouncementWebhookPayload,
+};

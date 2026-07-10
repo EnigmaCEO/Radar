@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SceAlert } from "./sce-alerts";
 import {
+  buildAnnouncementDetailsUrl,
+  buildAnnouncementPreviewMessages,
+  buildAnnouncementTags,
+  buildAnnouncementTelegramText,
+  buildAnnouncementWebhookPayload,
   buildAlertFanoutPreviewMessages,
   buildDigestDiscordEmbeds,
   buildDigestPreviewMessages,
@@ -186,6 +191,116 @@ describe("payload builders", () => {
     expect(payload.posts.map((post) => post.text)).toEqual(["post 1", "post 2"]);
   });
 
+  it("builds one announcement-feed preview per eligible alert and generates deterministic tags", () => {
+    process.env.RADAR_PUBLIC_BASE_URL = "https://radar.example.test/";
+    const alerts = [
+      {
+        ...makeAlert({
+          id: "RADAR-ANN-1",
+          chain: "Base",
+          provider: "Chainlink",
+          asset: "USDC",
+          assetPair: "USDC/USD",
+          severity: "critical",
+          observedValueLabel: "Observed feed age: 18h 27m",
+          thresholdValueLabel: "Threshold: 12h",
+        }),
+        eventId: "evt_1",
+        eventType: "alert_opened",
+      },
+      {
+        ...makeAlert({
+          id: "RADAR-ANN-2",
+          chain: "Ethereum",
+          provider: "Curve",
+          monitorType: "lp",
+          asset: "FRAX",
+          assetPair: "FRAX/USDC",
+          reasonCode: "LP_POOL_IMBALANCE",
+          observedValueLabel: "Observed imbalance: 41.0%",
+          thresholdValueLabel: "Threshold: 25.0%",
+        }),
+        eventId: "evt_2",
+        eventType: "severity_changed",
+      },
+    ];
+
+    const previews = buildAnnouncementPreviewMessages("telegram_bot", alerts, DELIVERY_META);
+
+    expect(previews).toHaveLength(2);
+    expect(previews[0].text).toContain("Details: https://radar.example.test/alerts/RADAR-ANN-1");
+    expect(previews[0].text).toContain("#RadarAlert #OracleAlert #DeFiRisk #CryptoAlerts #Chainlink #Base $USDC");
+    expect(previews[1].text).toContain("#LPAlert");
+    expect(previews[1].text).toContain("$FRAX $USDC");
+  });
+
+  it("builds announcement-feed payloads for webhook delivery with per-alert structure", () => {
+    process.env.RADAR_PUBLIC_BASE_URL = "https://radar.example.test";
+    const payload = buildAnnouncementWebhookPayload(
+      {
+        ...makeAlert({
+          id: "RADAR-ANN-3",
+          chain: "Base",
+          severity: "critical",
+          assetPair: "USDC/USD",
+          observedValueLabel: "Observed feed age: 18h 27m",
+          thresholdValueLabel: "Threshold: 12h",
+        }),
+        eventId: "evt_3",
+        eventType: "alert_updated",
+        sourceAlertUpdatedAt: "2026-07-03T11:59:00Z",
+      },
+      DELIVERY_META,
+    );
+
+    expect(payload).toMatchObject({
+      type: "announcement_feed_delivery",
+      deliveryMode: "announcement_feed",
+      alertId: "RADAR-ANN-3",
+      eventId: "evt_3",
+      eventType: "alert_updated",
+      detailsUrl: "https://radar.example.test/alerts/RADAR-ANN-3",
+    });
+  });
+
+  it("sanitizes and dedupes announcement-feed tags from trusted alert fields", () => {
+    const tags = buildAnnouncementTags({
+      ...makeAlert({
+        provider: "Chain-link",
+        chain: "Base!!",
+        asset: "USDC",
+        assetPair: "USDC/USD",
+      }),
+      eventId: "evt_4",
+      eventType: "alert_opened",
+    });
+
+    expect(tags.hashtags).toEqual(
+      expect.arrayContaining(["#RadarAlert", "#OracleAlert", "#Chainlink", "#Base"]),
+    );
+    expect(tags.cashtags).toEqual(["$USDC"]);
+  });
+
+  it("builds compact announcement-feed Telegram posts", () => {
+    process.env.RADAR_PUBLIC_BASE_URL = "https://radar.example.test";
+    const text = buildAnnouncementTelegramText({
+      ...makeAlert({
+        id: "RADAR-ANN-4",
+        severity: "critical",
+        observedValueLabel: "Observed feed age: 18h 27m",
+        thresholdValueLabel: "Threshold: 12h",
+      }),
+      eventId: "evt_5",
+      eventType: "alert_opened",
+      sourceAlertUpdatedAt: "2026-07-03T11:59:00Z",
+    });
+
+    expect(text).toContain("Radar Alert");
+    expect(text).toContain("Feed age: 18h 27m");
+    expect(text).toContain("Critical threshold: 12h");
+    expect(text).toContain("Details: https://radar.example.test/alerts/RADAR-ANN-4");
+  });
+
   it("builds Telegram dry-run preview messages with character counts", () => {
     const previews = buildAlertFanoutPreviewMessages("telegram_bot", [makeAlert()], DELIVERY_META);
 
@@ -336,6 +451,13 @@ describe("payload builders", () => {
 
     expect(previews.map((preview) => preview.messageIndex)).toEqual([0, 1]);
     expect(previews.map((preview) => preview.text)).toEqual(["first post", "second post"]);
+  });
+
+  it("builds deterministic announcement-feed alert details URLs", () => {
+    process.env.RADAR_PUBLIC_BASE_URL = "https://radar.example.test/";
+    expect(buildAnnouncementDetailsUrl("RADAR-20260706-74530549")).toBe(
+      "https://radar.example.test/alerts/RADAR-20260706-74530549",
+    );
   });
 });
 

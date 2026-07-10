@@ -1,4 +1,9 @@
-export const DELIVERY_MODES = ["alert_fanout", "public_thread", "digest"] as const;
+export const DELIVERY_MODES = [
+  "alert_fanout",
+  "public_thread",
+  "digest",
+  "announcement_feed",
+] as const;
 
 export type DeliveryMode = (typeof DELIVERY_MODES)[number];
 
@@ -8,6 +13,7 @@ export const DELIVERY_MODE_LABEL: Record<DeliveryMode, string> = {
   alert_fanout: "Alert fanout",
   public_thread: "Public thread",
   digest: "Digest",
+  announcement_feed: "Announcement feed",
 };
 
 export const DELIVERY_MODE_HELPER_TEXT: Record<DeliveryMode, string> = {
@@ -15,6 +21,8 @@ export const DELIVERY_MODE_HELPER_TEXT: Record<DeliveryMode, string> = {
     "Alert fanout: sends grouped situational briefings for matching alerts. Best for operator or client channels, not public community feeds.",
   public_thread: "Public thread: sends the approved Radar public thread for public or community channels.",
   digest: "Digest: sends a grouped situational briefing.",
+  announcement_feed:
+    "Announcement feed: sends one compact public-style post per alert. Best for public Telegram/Discord announcement feeds where each alert should be tracked and shared independently.",
 };
 
 export function isDeliveryMode(value: unknown): value is DeliveryMode {

@@ -18,8 +18,10 @@
 
 - Delivery destinations now store `deliveryMode` with `alert_fanout` as the default.
 - Manual delivery now applies each destination's configured mode: `alert_fanout`, `public_thread`, or `digest`.
+- Delivery destinations now also support `announcement_feed` for one-post-per-alert announcement channels.
 - `public_thread` requires an approved thread payload and preserves post order instead of sending raw alert fanout.
 - `alert_fanout` and `digest` now format matched alerts into grouped situational briefings for Discord and Telegram.
+- `announcement_feed` now sends one deterministic public-style post per eligible `alert_opened`, `alert_updated`, or `severity_changed` event, with server-generated tags, details links, and event-level dedupe through delivery logs.
 - Webhook deliveries keep raw alert data and now include a structured grouped briefing payload built from SCE explanation fields.
 - Dry-run manual delivery now returns sanitized rendered preview messages per destination so operators can inspect Telegram text, Discord embeds/posts, and webhook JSON before live send.
 - Briefing formatting now normalizes provider/title casing, compresses evidence into shorter operator-readable notes, and keeps Telegram preview truncation metadata aligned with the actual delivery text.

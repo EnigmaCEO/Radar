@@ -17,13 +17,16 @@ describe("delivery-modes", () => {
     expect(isDeliveryMode("alert_fanout")).toBe(true);
     expect(isDeliveryMode("public_thread")).toBe(true);
     expect(isDeliveryMode("digest")).toBe(true);
+    expect(isDeliveryMode("announcement_feed")).toBe(true);
     expect(isDeliveryMode("other")).toBe(false);
   });
 
   it("provides stable labels and helper text for UI display", () => {
     expect(DELIVERY_MODE_LABEL.public_thread).toBe("Public thread");
+    expect(DELIVERY_MODE_LABEL.announcement_feed).toBe("Announcement feed");
     expect(DELIVERY_MODE_HELPER_TEXT.digest).toContain("situational briefing");
     expect(DELIVERY_MODE_HELPER_TEXT.alert_fanout).toContain("not public community feeds");
     expect(DELIVERY_MODE_HELPER_TEXT.public_thread).toContain("public or community channels");
+    expect(DELIVERY_MODE_HELPER_TEXT.announcement_feed).toContain("tracked and shared independently");
   });
 });

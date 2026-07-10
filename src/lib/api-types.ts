@@ -11,7 +11,11 @@ export type RadarLiveDeliveryChannel = "discord" | "telegram" | "webhook";
 export type RadarLiveDeliveryStatus = "pending" | "sent" | "skipped" | "failed";
 export type RadarNotificationChannel = "discord";
 export type RadarWatchlistDeliveryChannel = "discord" | "telegram" | "email" | "webhook";
-export type RadarDeliveryMode = "alert_fanout" | "public_thread" | "digest";
+export type RadarDeliveryMode =
+  | "alert_fanout"
+  | "public_thread"
+  | "digest"
+  | "announcement_feed";
 
 export type AccountType = "internal" | "client" | "demo";
 export type AccountStatus = "active" | "pending" | "suspended";

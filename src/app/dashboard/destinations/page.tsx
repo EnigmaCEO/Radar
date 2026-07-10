@@ -86,6 +86,7 @@ const DELIVERY_MODE_COLORS: Record<DeliveryMode, string> = {
   alert_fanout: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
   public_thread: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
   digest: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  announcement_feed: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
 };
 
 const FREQUENCY_LABEL: Record<string, string> = {

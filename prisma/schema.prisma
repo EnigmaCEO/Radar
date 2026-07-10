@@ -67,7 +67,7 @@ model RadarDeliveryDestination {
   name             String
   channel          String    // discord_webhook | telegram_bot | webhook | x_account
   destinationUrl   String    // display/routing: webhook URL, chat ID, endpoint URL, X handle
-  deliveryMode     String    @default("alert_fanout") // alert_fanout | public_thread | digest
+  deliveryMode     String    @default("alert_fanout") // alert_fanout | public_thread | digest | announcement_feed
   enabled          Boolean   @default(true)
   minimumSeverity  String    @default("watch")
   pollingFrequency String    @default("1hr") // 15min | 30min | 1hr | 24hr
@@ -85,6 +85,8 @@ model RadarDeliveryDestination {
 
 // ── Delivery log ──────────────────────────────────────────────────────────────
 // One row per destination per manual (or later, cron) delivery attempt.
+// `announcement_feed` live sends may also write one row per destination/event
+// pair so delivery logs can enforce server-side event idempotency.
 // Written for every destination that was actually considered "in scope" for a
 // run (enabled + channel requested) — destinations excluded before that point
 // (disabled, wrong channel) are reported back to the caller but not logged.
