@@ -96,6 +96,13 @@ const FREQUENCY_LABEL: Record<string, string> = {
   "24hr": "Daily digest",
 };
 
+const TELEGRAM_SETUP_STEPS = [
+  "Add @RadarSagittaBot to the target group, supergroup, or channel.",
+  "Send at least one message in the chat after adding the bot so Telegram generates updates for that conversation.",
+  "If this is a channel or locked-down group, promote the bot to an admin so it can post alerts.",
+  "Paste the full numeric chat ID here. Supergroups and channels usually start with -100.",
+];
+
 function DestCard({
   dest,
   onReload,
@@ -453,7 +460,7 @@ function CreateDestForm({
       label: "Chat ID",
       placeholder: "e.g. -1001234567890",
       type: "text",
-      hint: "Add @RadarSagittaBot to the destination chat, then use the Telegram chat ID.",
+      hint: "Telegram setup is more involved than Discord or webhooks. Use the checklist below before saving the destination.",
     },
     webhook: {
       label: "Endpoint URL",
@@ -594,6 +601,20 @@ function CreateDestForm({
                 disabled={loading}
               />
               {cfg.hint && <p className="text-xs text-muted-foreground">{cfg.hint}</p>}
+              {channel === "telegram_bot" && (
+                <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-2 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">Telegram setup checklist</p>
+                  <ul className="list-disc space-y-1 pl-4">
+                    {TELEGRAM_SETUP_STEPS.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ul>
+                  <p>
+                    If you are not sure which chat ID to use, verify it before saving. The wrong ID
+                    will pass form validation but the bot will not be able to deliver alerts.
+                  </p>
+                </div>
+              )}
             </div>
           ) : null}
 

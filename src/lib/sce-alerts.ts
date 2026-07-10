@@ -359,6 +359,17 @@ export async function fetchSceAlerts(options?: {
   return (rawAlerts as Record<string, unknown>[]).map(sanitizeAlert).filter((alert): alert is SceAlert => alert !== null);
 }
 
+export async function fetchSceAlertById(id: string): Promise<SceAlert | null> {
+  const data = await fetchSceJson(
+    `/v1/sce/radar/alerts/${encodeURIComponent(id)}`,
+    new URLSearchParams(),
+    "SCE alert detail is unavailable.",
+  );
+
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  return sanitizeAlert(data as Record<string, unknown>);
+}
+
 export async function fetchSceAlertLedger(options: {
   since: string;
   until: string;
