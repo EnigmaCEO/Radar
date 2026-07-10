@@ -167,8 +167,8 @@ function ObjectPicker({
           </Select>
         </div>
       </div>
-      <div className="max-h-80 overflow-y-auto rounded-md border border-border/60">
-        <table className="w-full table-fixed border-collapse text-xs">
+      <div className="max-h-80 overflow-x-auto overflow-y-auto rounded-md border border-border/60">
+        <table className="min-w-[980px] w-full table-fixed border-collapse text-xs">
           <colgroup>
             <col className="w-8" />
             <col className="w-[36%]" />
@@ -627,7 +627,7 @@ export default function WatchlistsPage() {
   const atLimit = useMemo(() => limit !== Infinity && watchlists.length >= limit, [limit, watchlists.length]);
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="max-w-7xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Watchlists</h1>

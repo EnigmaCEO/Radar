@@ -1219,7 +1219,7 @@ export default function DestinationsPage() {
   const canAdd = liveEnabled && !atLimit;
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="max-w-7xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Delivery destinations</h1>
