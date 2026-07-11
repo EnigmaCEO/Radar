@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { Nav } from "@/components/nav";
 import { Footer } from "@/components/footer";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { PricingCta, type CheckoutPlan } from "@/components/pricing-cta";
 import { auth0 } from "@/lib/auth0";
 
@@ -178,6 +177,20 @@ function Cell({ value }: { value: boolean | string }) {
   return <span className="text-sm">{value}</span>;
 }
 
+function splitPlanPrice(priceLabel: string) {
+  if (priceLabel.endsWith("/mo")) {
+    return {
+      amount: priceLabel.slice(0, -3),
+      suffix: "/mo",
+    };
+  }
+
+  return {
+    amount: priceLabel,
+    suffix: null,
+  };
+}
+
 export default async function PricingPage() {
   const session = await auth0.getSession();
   const isAuthenticated = Boolean(session);
@@ -197,62 +210,74 @@ export default async function PricingPage() {
             </p>
           </div>
 
-          <div className="mb-20 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {plans.map((plan) => (
-              <Card
-                key={plan.slug}
-                className={plan.highlight ? "border-primary shadow-lg" : "border-border/60"}
-              >
-                <CardHeader>
-                  {plan.badge && (
-                    <span className="inline-flex items-center rounded-full bg-violet-600 px-2.5 py-0.5 text-xs font-semibold text-white">
-                      {plan.badge}
-                    </span>
-                  )}
-                  <CardTitle className="text-base">{plan.name}</CardTitle>
-                  <div className="text-2xl font-bold">{plan.priceLabel}</div>
-                  <CardDescription className="text-xs leading-5">{plan.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  <ul className="space-y-2">
-                    {plan.features.map((feature) => (
-                      <li key={feature.text} className="flex items-start gap-2 text-sm">
-                        {feature.included ? (
-                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                        ) : (
-                          <span className="mt-0.5 h-4 w-4 shrink-0 text-center text-muted-foreground">-</span>
-                        )}
-                        <span className={feature.included ? "" : "text-muted-foreground"}>
-                          {feature.text}
-                          {"detail" in feature && feature.detail ? (
-                            <span className="mt-0.5 block text-xs text-muted-foreground">
-                              {feature.detail}
-                            </span>
-                          ) : null}
+          <div className="mb-20 grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {plans.map((plan) => {
+              const price = splitPlanPrice(plan.priceLabel);
+
+              return (
+                <Card
+                  key={plan.slug}
+                  className={
+                    plan.highlight
+                      ? "flex flex-col border-2 border-violet-600 bg-card"
+                      : "flex flex-col border border-border bg-card shadow-sm"
+                  }
+                >
+                  <CardHeader className="pb-4">
+                    <div className="flex h-6 items-center">
+                      {plan.badge && (
+                        <span className="inline-flex items-center rounded-full bg-violet-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+                          {plan.badge}
                         </span>
-                      </li>
-                    ))}
-                  </ul>
-                  {plan.slug === "desk" ? (
-                    <Button
-                      variant={plan.highlight ? "default" : "outline"}
-                      size="sm"
-                      className="mt-2 w-full"
-                      asChild
-                    >
-                      <Link href="/request-access">{plan.cta}</Link>
-                    </Button>
-                  ) : (
-                    <PricingCta
-                      plan={plan.slug as CheckoutPlan}
-                      label={plan.cta}
-                      highlight={plan.highlight}
-                      isAuthenticated={isAuthenticated}
-                    />
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                      )}
+                    </div>
+                    <CardTitle className="text-base text-foreground">{plan.name}</CardTitle>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-bold text-foreground">{price.amount}</span>
+                      {price.suffix && <span className="text-sm text-muted-foreground">{price.suffix}</span>}
+                    </div>
+                    <CardDescription className="min-h-[2.75rem] text-sm leading-snug">
+                      {plan.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1 pb-4">
+                    <ul className="space-y-2">
+                      {plan.features.map((feature) => (
+                        <li key={feature.text} className="flex items-start gap-2 text-sm text-foreground">
+                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                          <span>
+                            {feature.text}
+                            {"detail" in feature && feature.detail ? (
+                              <span className="mt-0.5 block text-xs text-muted-foreground">
+                                {feature.detail}
+                              </span>
+                            ) : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                  <CardFooter className="pt-0">
+                    {plan.slug === "desk" ? (
+                      <Link
+                        href="/request-access"
+                        className="group inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      >
+                        {plan.cta}
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                      </Link>
+                    ) : (
+                      <PricingCta
+                        plan={plan.slug as CheckoutPlan}
+                        label={plan.cta}
+                        highlight={plan.highlight}
+                        isAuthenticated={isAuthenticated}
+                      />
+                    )}
+                  </CardFooter>
+                </Card>
+              );
+            })}
           </div>
 
           <div className="mb-20">
@@ -266,9 +291,9 @@ export default async function PricingPage() {
               {distinctions.map((item) => (
                 <Card key={item.name} className="border-border/60">
                   <CardHeader>
-                    <Badge variant="secondary" className="mb-2 w-fit text-xs">
+                    <span className="mb-2 inline-flex w-fit items-center rounded-full bg-violet-600/10 px-2.5 py-0.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
                       {item.name}
-                    </Badge>
+                    </span>
                     <CardTitle className="text-lg">{item.analogy}</CardTitle>
                     <CardDescription className="text-sm leading-6">{item.description}</CardDescription>
                   </CardHeader>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
@@ -21,6 +21,7 @@ export function PricingCta({ plan, label, highlight, isAuthenticated }: PricingC
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autoStartRef = useRef(false);
   const ctaClassName = highlight
     ? "group inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     : "group inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
@@ -47,8 +48,15 @@ export function PricingCta({ plan, label, highlight, isAuthenticated }: PricingC
 
   // Auto-start checkout when an authenticated user returns to /pricing?plan=<this plan>.
   useEffect(() => {
+    if (autoStartRef.current) {
+      return;
+    }
+
     if (isAuthenticated && searchParams.get("plan") === plan) {
-      void startCheckout();
+      autoStartRef.current = true;
+      queueMicrotask(() => {
+        void startCheckout();
+      });
     }
   }, [isAuthenticated, searchParams, plan, startCheckout]);
 
@@ -64,7 +72,7 @@ export function PricingCta({ plan, label, highlight, isAuthenticated }: PricingC
   }
 
   return (
-    <div className="mt-2 flex flex-col gap-1">
+    <div className="flex w-full flex-col gap-1">
       <button
         type="button"
         className={ctaClassName}
