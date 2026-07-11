@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { Footer } from "@/components/footer";
 import { Nav } from "@/components/nav";
 import {
@@ -7,21 +8,15 @@ import {
   isCoverageGapAlert,
 } from "@/lib/alert-classification";
 import { formatDurationBetween } from "@/lib/alert-time";
+import { auth0 } from "@/lib/auth0";
+import { buildMonitorCtaHref, toPublicRadarAlert } from "@/lib/public-alerts";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LocalDateTime } from "@/components/local-time";
 import { fetchSceAlertById } from "@/lib/sce-alerts";
 
 export const dynamic = "force-dynamic";
-
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }).format(date);
-}
 
 function severityVariant(severity: string): "critical" | "warning" | "watch" {
   if (severity === "critical") return "critical";
@@ -29,7 +24,12 @@ function severityVariant(severity: string): "critical" | "warning" | "watch" {
   return "watch";
 }
 
-function detailRows(alert: Awaited<ReturnType<typeof fetchSceAlertById>>) {
+function statusLabel(status: string, isCoverageGap: boolean): string {
+  if (isCoverageGap && status === "resolved") return "restored";
+  return status;
+}
+
+function detailRows(alert: ReturnType<typeof toPublicRadarAlert>) {
   if (!alert) return [];
   return [
     ["Monitor type", alert.monitorType],
@@ -39,12 +39,9 @@ function detailRows(alert: Awaited<ReturnType<typeof fetchSceAlertById>>) {
     ["Asset pair", alert.assetPair ?? null],
     ["Route", alert.route],
     ["Pool", alert.poolName ?? null],
-    ["Reason code", alert.reasonCode],
     ["Threshold", alert.thresholdName ?? null],
     ["Observed value", alert.observedValueLabel ?? null],
     ["Threshold value", alert.thresholdValueLabel ?? null],
-    ["Purpose", alert.purpose],
-    ["Object ID", alert.objectId],
   ].filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0);
 }
 
@@ -60,22 +57,25 @@ export default async function PublicAlertDetailPage({
     notFound();
   }
 
-  const rows = detailRows(alert);
+  const publicAlert = toPublicRadarAlert(alert);
+  const session = await auth0.getSession();
+  const rows = detailRows(publicAlert);
   const isCoverageGap = isCoverageGapAlert({
     signalClass: alert.signalClass,
     reasonCode: alert.reasonCode,
-    summary: alert.publicSummary ?? alert.summary,
-    openedAt: alert.openedAt ?? undefined,
-    createdAt: alert.createdAt,
+    summary: publicAlert.summary,
+    openedAt: publicAlert.openedAt ?? undefined,
+    createdAt: publicAlert.createdAt,
   });
   const coverageTier = getCoverageGapTier({
     signalClass: alert.signalClass,
     reasonCode: alert.reasonCode,
-    summary: alert.publicSummary ?? alert.summary,
-    openedAt: alert.openedAt ?? undefined,
-    createdAt: alert.createdAt,
-    coverageTier: alert.coverageTier,
+    summary: publicAlert.summary,
+    openedAt: publicAlert.openedAt ?? undefined,
+    createdAt: publicAlert.createdAt,
+    coverageTier: publicAlert.coverageTier,
   });
+  const monitorCtaHref = buildMonitorCtaHref(Boolean(session), alert.objectId ?? null);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -89,13 +89,13 @@ export default async function PublicAlertDetailPage({
               ) : (
                 <Badge variant={severityVariant(alert.severity)}>{alert.severity}</Badge>
               )}
-              <Badge variant="secondary">{alert.status}</Badge>
-              <Badge variant="secondary">{alert.monitorType}</Badge>
+              <Badge variant="secondary">{statusLabel(alert.status, isCoverageGap)}</Badge>
+              <Badge variant="secondary">{publicAlert.monitorType}</Badge>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">{alert.id}</p>
+              <p className="text-sm text-muted-foreground">{publicAlert.id}</p>
               <h1 className="text-3xl font-bold tracking-tight">
-                {alert.publicSummary ?? alert.summary}
+                {publicAlert.summary}
               </h1>
             </div>
           </div>
@@ -103,26 +103,26 @@ export default async function PublicAlertDetailPage({
           {isCoverageGap && (
             <Card className="border-border/60">
               <CardHeader>
-                <CardTitle className="text-base">Coverage gap</CardTitle>
+              <CardTitle className="text-base">Coverage gap</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
                 <p>Radar could not observe this object, so object state is currently unknown.</p>
-                {alert.failureCause && <p>Cause: {alert.failureCause.replace(/_/g, " ")}</p>}
-                {alert.lastSuccessfulObservationAt && (
+                {publicAlert.failureCause && <p>Cause: {publicAlert.failureCause.replace(/_/g, " ")}</p>}
+                {publicAlert.lastSuccessfulObservationAt && (
                   <p>
-                    Last successful observation: {formatDateTime(alert.lastSuccessfulObservationAt)} (
-                    {formatDurationBetween(alert.lastSuccessfulObservationAt)} ago)
+                    Last successful observation: <LocalDateTime value={publicAlert.lastSuccessfulObservationAt} preset="detailed" /> (
+                    {formatDurationBetween(publicAlert.lastSuccessfulObservationAt)} ago)
                   </p>
                 )}
-                {alert.consecutiveFailedCycles !== null &&
-                  alert.consecutiveFailedCycles !== undefined && (
-                    <p>Consecutive failed cycles: {alert.consecutiveFailedCycles}</p>
+                {publicAlert.consecutiveFailedCycles !== null &&
+                  publicAlert.consecutiveFailedCycles !== undefined && (
+                    <p>Consecutive failed cycles: {publicAlert.consecutiveFailedCycles}</p>
                   )}
                 <p>
                   Open duration:{" "}
-                  {formatDurationBetween(alert.openedAt ?? alert.createdAt, alert.resolvedAt ?? new Date())}
+                  {formatDurationBetween(publicAlert.openedAt ?? publicAlert.createdAt, publicAlert.resolvedAt ?? new Date())}
                 </p>
-                <p>Object state: {alert.objectState ?? "unknown"}</p>
+                <p>Object state: {publicAlert.objectState ?? "unknown"}</p>
               </CardContent>
             </Card>
           )}
@@ -135,25 +135,25 @@ export default async function PublicAlertDetailPage({
               {alert.whatHappened && (
                 <div>
                   <p className="text-sm font-medium">What happened</p>
-                  <p className="text-sm text-muted-foreground">{alert.whatHappened}</p>
+                  <p className="text-sm text-muted-foreground">{publicAlert.whatHappened}</p>
                 </div>
               )}
-              {alert.whyItMatters && (
+              {publicAlert.whyItMatters && (
                 <div>
                   <p className="text-sm font-medium">Why it matters</p>
-                  <p className="text-sm text-muted-foreground">{alert.whyItMatters}</p>
+                  <p className="text-sm text-muted-foreground">{publicAlert.whyItMatters}</p>
                 </div>
               )}
-              {alert.radarStatus && (
+              {publicAlert.radarStatus && (
                 <div>
                   <p className="text-sm font-medium">Status</p>
-                  <p className="text-sm text-muted-foreground">{alert.radarStatus}</p>
+                  <p className="text-sm text-muted-foreground">{publicAlert.radarStatus}</p>
                 </div>
               )}
-              {alert.nextWatch && (
+              {publicAlert.nextWatch && (
                 <div>
                   <p className="text-sm font-medium">Next watch</p>
-                  <p className="text-sm text-muted-foreground">{alert.nextWatch}</p>
+                  <p className="text-sm text-muted-foreground">{publicAlert.nextWatch}</p>
                 </div>
               )}
             </CardContent>
@@ -176,60 +176,78 @@ export default async function PublicAlertDetailPage({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Created
                 </p>
-                <p className="text-sm">{formatDateTime(alert.createdAt)}</p>
+                <p className="text-sm">
+                  <LocalDateTime value={publicAlert.createdAt} preset="detailed" />
+                </p>
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Updated
                 </p>
-                <p className="text-sm">{formatDateTime(alert.updatedAt)}</p>
+                <p className="text-sm">
+                  <LocalDateTime value={publicAlert.updatedAt} preset="detailed" />
+                </p>
               </div>
             </CardContent>
           </Card>
 
-          {(alert.severityExplanation ||
-            alert.thresholdExplanation ||
-            alert.evidenceExplanation ||
-            alert.evidenceSummary ||
-            alert.humanRiskSummary) && (
+          {(publicAlert.severityExplanation ||
+            publicAlert.thresholdExplanation ||
+            publicAlert.evidenceExplanation ||
+            publicAlert.evidenceSummary ||
+            publicAlert.humanRiskSummary) && (
             <Card className="border-border/60">
               <CardHeader>
                 <CardTitle className="text-base">Evidence and context</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {alert.severityExplanation && (
+                {publicAlert.severityExplanation && (
                   <div>
                     <p className="text-sm font-medium">Severity explanation</p>
-                    <p className="text-sm text-muted-foreground">{alert.severityExplanation}</p>
+                    <p className="text-sm text-muted-foreground">{publicAlert.severityExplanation}</p>
                   </div>
                 )}
-                {alert.thresholdExplanation && (
+                {publicAlert.thresholdExplanation && (
                   <div>
                     <p className="text-sm font-medium">Threshold context</p>
-                    <p className="text-sm text-muted-foreground">{alert.thresholdExplanation}</p>
+                    <p className="text-sm text-muted-foreground">{publicAlert.thresholdExplanation}</p>
                   </div>
                 )}
-                {alert.evidenceExplanation && (
+                {publicAlert.evidenceExplanation && (
                   <div>
                     <p className="text-sm font-medium">Evidence explanation</p>
-                    <p className="text-sm text-muted-foreground">{alert.evidenceExplanation}</p>
+                    <p className="text-sm text-muted-foreground">{publicAlert.evidenceExplanation}</p>
                   </div>
                 )}
-                {alert.evidenceSummary && (
+                {publicAlert.evidenceSummary && (
                   <div>
                     <p className="text-sm font-medium">Evidence summary</p>
-                    <p className="text-sm text-muted-foreground">{alert.evidenceSummary}</p>
+                    <p className="text-sm text-muted-foreground">{publicAlert.evidenceSummary}</p>
                   </div>
                 )}
-                {alert.humanRiskSummary && (
+                {publicAlert.humanRiskSummary && (
                   <div>
                     <p className="text-sm font-medium">Human risk summary</p>
-                    <p className="text-sm text-muted-foreground">{alert.humanRiskSummary}</p>
+                    <p className="text-sm text-muted-foreground">{publicAlert.humanRiskSummary}</p>
                   </div>
                 )}
               </CardContent>
             </Card>
           )}
+
+          <Card className="border-border/60 bg-muted/30">
+            <CardHeader>
+              <CardTitle className="text-base">Monitor this object with Radar</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                Track this object privately and route evidence-backed alerts into your operating channels.
+              </p>
+              <Button asChild>
+                <Link href={monitorCtaHref}>Monitor this object with Radar</Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </main>
       <Footer />

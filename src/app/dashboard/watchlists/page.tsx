@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, Pencil, Plus, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { useAccount } from "@/lib/account-context";
-import { getWatchlistLimit } from "@/lib/plan-limits";
+import {
+  allowsPrivateWatchlists,
+  getPlanLabel,
+  resolvePlan,
+} from "@/lib/plan-limits";
 import type { SceCatalogObject, SceCatalogResponse, SceMonitorType } from "@/lib/sce-catalog-types";
 import {
   OBJECT_PICKER_MONITOR_TYPE_ORDER,
@@ -401,11 +406,13 @@ function WatchlistCard({
 function WatchlistForm({
   catalog,
   initial,
+  initialObjectIds,
   onSaved,
   onCancel,
 }: {
   catalog: SceCatalogResponse;
   initial?: Watchlist;
+  initialObjectIds?: string[];
   onSaved: (w: Watchlist) => void;
   onCancel: () => void;
 }) {
@@ -421,7 +428,7 @@ function WatchlistForm({
   const [assets, setAssets] = useState<string[]>(initial?.assets ?? []);
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [purposes, setPurposes] = useState<string[]>(initial?.purposes ?? []);
-  const [objectIds, setObjectIds] = useState<string[]>(initial?.objectIds ?? []);
+  const [objectIds, setObjectIds] = useState<string[]>(initial?.objectIds ?? initialObjectIds ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -599,7 +606,11 @@ function WatchlistForm({
 
 export default function WatchlistsPage() {
   const { account } = useAccount();
-  const limit = getWatchlistLimit(account.plan);
+  const searchParams = useSearchParams();
+  const planAllowsPrivateWatchlists = allowsPrivateWatchlists(account.plan);
+  const planLabel = getPlanLabel(account.plan);
+  const preselectedObjectId = searchParams.get("objectId");
+  const limit = Infinity;
 
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [catalog, setCatalog] = useState<SceCatalogResponse | null>(null);
@@ -624,7 +635,13 @@ export default function WatchlistsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const atLimit = useMemo(() => limit !== Infinity && watchlists.length >= limit, [limit, watchlists.length]);
+  useEffect(() => {
+    if (preselectedObjectId && catalog && planAllowsPrivateWatchlists) {
+      setShowForm(true);
+    }
+  }, [catalog, planAllowsPrivateWatchlists, preselectedObjectId]);
+
+  const atLimit = !planAllowsPrivateWatchlists;
 
   return (
     <div className="max-w-7xl space-y-6">
@@ -634,7 +651,7 @@ export default function WatchlistsPage() {
           <p className="text-sm text-muted-foreground mt-1">
             {watchlists.length}
             {limit !== Infinity ? ` of ${limit}` : ""} watchlists · plan:{" "}
-            <span className="capitalize">{account.plan.replace("_", " ")}</span>
+            <span>{planLabel}</span>
           </p>
         </div>
         {!atLimit && catalog && (
@@ -648,7 +665,11 @@ export default function WatchlistsPage() {
       {atLimit && (
         <Card className="border-violet-600/30 bg-violet-600/5">
           <CardContent className="py-4 px-4 flex items-center justify-between gap-4">
-            <p className="text-sm">You&apos;ve reached your plan&apos;s watchlist limit. Upgrade to add more.</p>
+            <p className="text-sm">
+              {resolvePlan(account.plan) === "radar_intel"
+                ? "Intel does not include private watchlists."
+                : "Private object monitoring starts on Watch. Upgrade to create watchlists."}
+            </p>
             <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white shrink-0" asChild>
               <Link href="/dashboard/settings">
                 Upgrade <ArrowRight className="ml-1 h-3 w-3" />
@@ -664,9 +685,10 @@ export default function WatchlistsPage() {
         </Card>
       )}
 
-      {showForm && catalog && (
+      {showForm && catalog && planAllowsPrivateWatchlists && (
         <WatchlistForm
           catalog={catalog}
+          initialObjectIds={preselectedObjectId ? [preselectedObjectId] : undefined}
           onSaved={(w) => {
             setWatchlists((p) => [w, ...p]);
             setShowForm(false);

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { fetchSceAlerts, SceAlertsError, type SceAlert } from "@/lib/sce-alerts";
 import type { RadarAlert, RadarMonitorType, RadarSeverity, RadarStatus } from "@/lib/api-types";
+import { allowsPrivateWatchlists, getPrivateHistoryDays, resolvePlan } from "@/lib/plan-limits";
+import { bootstrapRadarAccount } from "@/lib/radar-api-backend";
 
 function toSeverity(value: string): RadarSeverity {
   if (value === "critical" || value === "warning" || value === "watch") {
@@ -59,6 +61,12 @@ function toRadarAlert(alert: SceAlert): RadarAlert {
     thresholdName: alert.thresholdName ?? undefined,
     observedValueLabel: alert.observedValueLabel ?? undefined,
     thresholdValueLabel: alert.thresholdValueLabel ?? undefined,
+    declaredHeartbeatSeconds: alert.declaredHeartbeatSeconds ?? undefined,
+    appliedThresholdSeconds: alert.appliedThresholdSeconds ?? undefined,
+    appliedThresholdKind: alert.appliedThresholdKind ?? undefined,
+    thresholdSourceLabel: alert.thresholdSourceLabel ?? undefined,
+    evidenceState: alert.evidenceState ?? undefined,
+    publicVerificationState: alert.publicVerificationState ?? undefined,
     whatHappened: alert.whatHappened ?? undefined,
     whyItMatters: alert.whyItMatters ?? undefined,
     radarStatus: alert.radarStatus ?? undefined,
@@ -74,9 +82,36 @@ function toRadarAlert(alert: SceAlert): RadarAlert {
   };
 }
 
+function isWithinHistoryWindow(alert: SceAlert, historyDays: number, now: Date): boolean {
+  if (alert.status === "active") return true;
+
+  const cutoff = now.getTime() - historyDays * 24 * 60 * 60 * 1000;
+  const candidateTimestamp =
+    alert.resolvedAt ??
+    alert.updatedAt ??
+    alert.openedAt ??
+    alert.createdAt;
+  const timestamp = new Date(candidateTimestamp).getTime();
+  return Number.isFinite(timestamp) && timestamp >= cutoff;
+}
+
 export async function GET(request: NextRequest) {
   const session = await auth0.getSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const account = await bootstrapRadarAccount(session);
+  if (!allowsPrivateWatchlists(account.plan)) {
+    const resolvedPlan = resolvePlan(account.plan);
+    return NextResponse.json(
+      {
+        error:
+          resolvedPlan === "radar_intel"
+            ? "Intel does not include private object alert history."
+            : "Private alert history requires a Watch, Signal, or Desk plan.",
+      },
+      { status: 403 },
+    );
+  }
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") ?? undefined;
@@ -86,10 +121,12 @@ export async function GET(request: NextRequest) {
   const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(limitParam, 200)) : 100;
 
   try {
+    const historyDays = getPrivateHistoryDays(account.plan);
     const alerts = await fetchSceAlerts({ status, limit });
     const filtered = alerts
       .filter((alert) => (severity ? alert.severity === severity : true))
       .filter((alert) => (monitorType ? alert.monitorType === monitorType : true))
+      .filter((alert) => (historyDays === null ? true : isWithinHistoryWindow(alert, historyDays, new Date())))
       .map(toRadarAlert);
 
     return NextResponse.json(filtered, {

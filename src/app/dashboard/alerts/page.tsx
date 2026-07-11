@@ -12,13 +12,14 @@ import {
   isCoverageGapAlert,
 } from "@/lib/alert-classification";
 import { correlateAlerts, type CorrelatedAlertGroup, type CorrelatedAlertListItem } from "@/lib/alert-correlation";
+import { groupCoverageGapAlerts, type CoverageGapGroup } from "@/lib/coverage-gap-grouping";
 import { sortAlertsByUpdatedAt } from "@/lib/alert-feed";
-import { formatAlertLifecycle, formatDateWindow, formatDurationBetween } from "@/lib/alert-time";
+import { formatAlertLifecycle, formatDurationBetween } from "@/lib/alert-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { LocalDateTime, LocalDateWindow } from "@/components/local-time";
 import { Select } from "@/components/ui/select";
-import { formatDate } from "@/lib/utils";
 
 function firstString(...values: Array<string | null | undefined>): string | null {
   for (const value of values) {
@@ -52,6 +53,19 @@ function StatusBadge({ status }: { status: RadarStatus }) {
         : "border border-primary/20 bg-primary/10 text-primary";
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${className}`}>{status}</span>
+  );
+}
+
+function CoverageStatusBadge({ status }: { status: RadarStatus }) {
+  const label = status === "resolved" ? "restored" : status === "superseded" ? "superseded" : "active";
+  const className =
+    status === "resolved"
+      ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+      : status === "superseded"
+        ? "border border-slate-500/20 bg-slate-500/10 text-slate-300"
+        : "border border-primary/20 bg-primary/10 text-primary";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${className}`}>{label}</span>
   );
 }
 
@@ -136,6 +150,56 @@ function alertMetricLine(alert: RadarAlert): Array<string> {
   return parts;
 }
 
+function humanizeContractState(value: string | undefined): string | null {
+  if (!value) return null;
+  return value.replace(/_/g, " ").trim();
+}
+
+function formatSecondsLabel(value: number | undefined): string | null {
+  if (value === undefined || !Number.isFinite(value) || value < 0) return null;
+  if (value < 60) return `${value}s`;
+  const totalMinutes = Math.floor(value / 60);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 || parts.length === 0) parts.push(`${minutes}m`);
+  return parts.join(" ");
+}
+
+function verificationSummaryLine(alert: RadarAlert): Array<string> {
+  const parts: string[] = [];
+  const publicVerificationState = humanizeContractState(alert.publicVerificationState);
+  const evidenceState = humanizeContractState(alert.evidenceState);
+  const thresholdSourceLabel = alert.thresholdSourceLabel?.trim();
+
+  if (publicVerificationState) parts.push(`Public verification: ${publicVerificationState}`);
+  if (evidenceState) parts.push(`Evidence: ${evidenceState}`);
+  if (thresholdSourceLabel) parts.push(`Threshold source: ${thresholdSourceLabel}`);
+
+  return parts;
+}
+
+function thresholdContractLine(alert: RadarAlert): Array<string> {
+  const parts: string[] = [];
+  const declaredHeartbeat = formatSecondsLabel(alert.declaredHeartbeatSeconds);
+  const appliedThreshold = formatSecondsLabel(alert.appliedThresholdSeconds);
+  const appliedThresholdKind = humanizeContractState(alert.appliedThresholdKind);
+
+  if (declaredHeartbeat) parts.push(`Declared heartbeat: ${declaredHeartbeat}`);
+  if (appliedThreshold) {
+    parts.push(
+      appliedThresholdKind
+        ? `Applied ${appliedThresholdKind}: ${appliedThreshold}`
+        : `Applied threshold: ${appliedThreshold}`,
+    );
+  }
+
+  return parts;
+}
+
 function GroupCard({ group }: { group: CorrelatedAlertGroup }) {
   const firstOpenedAt = group.alerts[0]?.openedAt ?? group.alerts[0]?.createdAt ?? group.openedAt;
   const lastOpenedAt =
@@ -173,7 +237,9 @@ function GroupCard({ group }: { group: CorrelatedAlertGroup }) {
                 <span>{group.reasonCode}</span>
                 {group.chain && <span>{group.chain}</span>}
                 <span>{lifecycle}</span>
-                <span>{formatDateWindow(firstOpenedAt, lastOpenedAt)}</span>
+                <span>
+                  <LocalDateWindow start={firstOpenedAt} end={lastOpenedAt} />
+                </span>
               </div>
               <div className="mt-3 space-y-2">
                 {group.alerts.map((alert) => (
@@ -202,6 +268,25 @@ function GroupCard({ group }: { group: CorrelatedAlertGroup }) {
                         {alertMetricLine(alert).map((value) => (
                           <span key={value}>{value}</span>
                         ))}
+                      </div>
+                    )}
+                    {(verificationSummaryLine(alert).length > 0 ||
+                      thresholdContractLine(alert).length > 0) && (
+                      <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                        {verificationSummaryLine(alert).length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {verificationSummaryLine(alert).map((value) => (
+                              <span key={value}>{value}</span>
+                            ))}
+                          </div>
+                        )}
+                        {thresholdContractLine(alert).length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {thresholdContractLine(alert).map((value) => (
+                              <span key={value}>{value}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -242,12 +327,33 @@ function FindingAlertCard({ alert }: { alert: RadarAlert }) {
                 ))}
               </div>
               <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <span>{formatDate(alert.openedAt ?? alert.createdAt)}</span>
+                <span>
+                  <LocalDateTime value={alert.openedAt ?? alert.createdAt} preset="compact" />
+                </span>
                 <span>{formatAlertLifecycle(alert)}</span>
                 {alertMetricLine(alert).map((value) => (
                   <span key={value}>{value}</span>
                 ))}
               </div>
+              {(verificationSummaryLine(alert).length > 0 ||
+                thresholdContractLine(alert).length > 0) && (
+                <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                  {verificationSummaryLine(alert).length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {verificationSummaryLine(alert).map((value) => (
+                        <span key={value}>{value}</span>
+                      ))}
+                    </div>
+                  )}
+                  {thresholdContractLine(alert).length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {thresholdContractLine(alert).map((value) => (
+                        <span key={value}>{value}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
@@ -265,6 +371,10 @@ function CoverageGapCard({ alert }: { alert: RadarAlert }) {
   const tier = getCoverageGapTier(alert);
   const lastObserved = firstString(alert.lastSuccessfulObservationAt);
   const objectState = alert.objectState ?? "unknown";
+  const restorationLine =
+    alert.status === "resolved" && alert.resolvedAt
+      ? `Observation restored after ${formatDurationBetween(alert.openedAt ?? alert.createdAt, alert.resolvedAt)}`
+      : null;
 
   return (
     <Card className={COVERAGE_CARD_CLASSES[tier]}>
@@ -287,7 +397,7 @@ function CoverageGapCard({ alert }: { alert: RadarAlert }) {
                 <p>Cause: {coverageCause(alert)}</p>
                 {lastObserved && (
                   <p>
-                    Last successful observation: {formatDate(lastObserved)} (
+                    Last successful observation: <LocalDateTime value={lastObserved} preset="compact" /> (
                     {formatDurationBetween(lastObserved)} ago)
                   </p>
                 )}
@@ -295,9 +405,15 @@ function CoverageGapCard({ alert }: { alert: RadarAlert }) {
                   <p>Consecutive failed cycles: {alert.consecutiveFailedCycles}</p>
                 )}
                 <p>Object state: {objectState}</p>
-                <p>
-                  Opened {formatDate(alert.openedAt ?? alert.createdAt)} - {formatAlertLifecycle(alert)}
-                </p>
+                {restorationLine ? (
+                  <p>{restorationLine}</p>
+                ) : (
+                  <p>
+                    Opened <LocalDateTime value={alert.openedAt ?? alert.createdAt} preset="compact" /> -{" "}
+                    {formatAlertLifecycle(alert)}
+                  </p>
+                )}
+                {alert.status === "resolved" && <p>Object state during gap: never observed.</p>}
               </div>
               <div className="mt-3">
                 <Link
@@ -312,7 +428,76 @@ function CoverageGapCard({ alert }: { alert: RadarAlert }) {
           <div className="flex shrink-0 flex-col items-end gap-2">
             <CoverageGapBadge alert={alert} />
             <MonitorTypeBadge type={alert.monitorType} />
-            <StatusBadge status={alert.status} />
+            <CoverageStatusBadge status={alert.status} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CoverageGapGroupCard({ group }: { group: CoverageGapGroup }) {
+  const representative = group.alerts[0];
+  const tier = getCoverageGapTier({
+    signalClass: representative?.signalClass,
+    reasonCode: representative?.reasonCode ?? "",
+    summary: representative?.summary ?? "",
+    openedAt: group.openedAt,
+    createdAt: group.openedAt,
+    coverageTier: representative?.coverageTier,
+  });
+  const statusLabel =
+    group.status === "resolved"
+      ? `all restored within ${group.summary.replace(/^all restored within /, "")}`
+      : group.summary;
+
+  return (
+    <Card className={COVERAGE_CARD_CLASSES[tier]}>
+      <CardContent className="px-4 py-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium">{group.title}</p>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <span>
+                  {group.routeCount} route{group.routeCount === 1 ? "" : "s"} unobservable
+                </span>
+                <span>
+                  first opened <LocalDateTime value={group.openedAt} preset="compact" />
+                </span>
+                <span>{statusLabel}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                {group.routes.map((route) => (
+                  <span key={route}>{route}</span>
+                ))}
+              </div>
+              <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                <p>Cause: {group.cause}</p>
+                <p>Object state: unknown during the blind window.</p>
+              </div>
+              <div className="mt-3 space-y-1">
+                {group.alerts.map((alert) => (
+                  <Link
+                    key={alert.id}
+                    href={`/alerts/${alert.id}`}
+                    className="block text-xs text-foreground underline underline-offset-4"
+                  >
+                    {alert.route ?? alert.summary}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-xs text-slate-200">
+              {coverageGapBadgeLabel(tier)}
+            </span>
+            <MonitorTypeBadge type={representative?.monitorType ?? "bridge"} />
+            <CoverageStatusBadge status={group.status} />
           </div>
         </div>
       </CardContent>
@@ -322,12 +507,16 @@ function CoverageGapCard({ alert }: { alert: RadarAlert }) {
 
 function splitRows(rows: CorrelatedAlertListItem[]) {
   const findings: CorrelatedAlertListItem[] = [];
-  const coverageGaps: CorrelatedAlertListItem[] = [];
+  const coverageGaps: RadarAlert[] = [];
 
   for (const row of rows) {
     const sample = row.kind === "group" ? row.item.alerts[0] : row.item;
     if (sample && isCoverageGapAlert(sample)) {
-      coverageGaps.push(row);
+      if (row.kind === "group") {
+        coverageGaps.push(...row.item.alerts);
+      } else {
+        coverageGaps.push(row.item);
+      }
     } else {
       findings.push(row);
     }
@@ -397,6 +586,7 @@ export default function AlertsPage() {
 
   const rows = correlateAlerts(alerts);
   const { findings, coverageGaps } = splitRows(rows);
+  const coverageGroups = groupCoverageGapAlerts(coverageGaps);
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -404,8 +594,8 @@ export default function AlertsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Alerts</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {findings.length} finding row{findings.length !== 1 ? "s" : ""}, {coverageGaps.length} coverage gap
-            {coverageGaps.length !== 1 ? "s" : ""} from {alerts.length} alert
+            {findings.length} finding row{findings.length !== 1 ? "s" : ""}, {coverageGroups.length} coverage incident
+            {coverageGroups.length !== 1 ? "s" : ""} from {alerts.length} alert
             {alerts.length !== 1 ? "s" : ""} matching filters
           </p>
         </div>
@@ -491,14 +681,14 @@ export default function AlertsPage() {
                 Radar could not observe these objects, so object state is currently unknown.
               </p>
             </div>
-            {coverageGaps.length === 0 ? (
+            {coverageGroups.length === 0 ? (
               <Card className="border-border/60">
                 <CardContent className="py-6 text-sm text-muted-foreground">
                   No active coverage gaps match the current filters.
                 </CardContent>
               </Card>
             ) : (
-              coverageGaps.map(renderRow)
+              coverageGroups.map((group) => <CoverageGapGroupCard key={group.id} group={group} />)
             )}
           </section>
         </div>

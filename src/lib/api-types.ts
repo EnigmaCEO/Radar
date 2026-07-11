@@ -5,7 +5,17 @@ export type RadarSeverity = "watch" | "warning" | "critical";
 export type RadarStatus = "active" | "resolved" | "superseded";
 export type RadarVisibility = "public" | "private";
 export type RadarAlertProvenance = "sample" | "manual" | "runtime" | "live" | "drill";
-export type RadarWatchlistPlan = "free" | "radar_live" | "radar_pro" | "managed";
+export type RadarWatchlistPlan =
+  | "public_record"
+  | "watch"
+  | "radar"
+  | "radar_signal"
+  | "radar_intel"
+  | "desk"
+  | "free"
+  | "radar_live"
+  | "radar_pro"
+  | "managed";
 export type RadarClientStatus = "trial" | "active" | "past_due" | "suspended" | "canceled";
 export type RadarLiveDeliveryChannel = "discord" | "telegram" | "webhook";
 export type RadarLiveDeliveryStatus = "pending" | "sent" | "skipped" | "failed";
@@ -63,6 +73,12 @@ export interface RadarAlert {
   thresholdName?: string;
   observedValueLabel?: string;
   thresholdValueLabel?: string;
+  declaredHeartbeatSeconds?: number;
+  appliedThresholdSeconds?: number;
+  appliedThresholdKind?: string;
+  thresholdSourceLabel?: string;
+  evidenceState?: string;
+  publicVerificationState?: string;
   publicSummary?: string;
   whatHappened?: string;
   whyItMatters?: string;

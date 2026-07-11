@@ -94,7 +94,7 @@ export default function SupportPage() {
                 Terms of Service
               </Link>
               <Link href="/request-access" className="text-foreground underline underline-offset-4">
-                Managed plan enquiries
+                Desk plan enquiries
               </Link>
             </div>
           </section>

@@ -16,6 +16,15 @@ import {
   XCircle,
 } from "lucide-react";
 import { useAccount } from "@/lib/account-context";
+import {
+  canConfigurePrivateDestinations,
+  canRunManualDelivery,
+  getAllowedDeliveryModes,
+  getAllowedDestinationChannels,
+  getDestinationLimit,
+  getPlanLabel,
+  resolvePlan,
+} from "@/lib/plan-limits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,6 +105,16 @@ const FREQUENCY_LABEL: Record<string, string> = {
   "24hr": "Daily digest",
 };
 
+const DAILY_DIGEST_FREQUENCY = "24hr";
+
+// Cadence is chosen at delivery-creation time (not enforced in the DB). Watch is
+// limited to the daily-digest cadence; Signal and above can pick per-cycle options.
+function getAllowedFrequencies(plan: string): string[] {
+  return resolvePlan(plan) === "watch"
+    ? [DAILY_DIGEST_FREQUENCY]
+    : Object.keys(FREQUENCY_LABEL);
+}
+
 const TELEGRAM_SETUP_STEPS = [
   "Add @RadarSagittaBot to the target group, supergroup, or channel.",
   "Send at least one message in the chat after adding the bot so Telegram generates updates for that conversation.",
@@ -105,9 +124,13 @@ const TELEGRAM_SETUP_STEPS = [
 
 function DestCard({
   dest,
+  allowedFrequencies,
+  allowedDeliveryModes,
   onReload,
 }: {
   dest: Destination;
+  allowedFrequencies: string[];
+  allowedDeliveryModes: DeliveryMode[];
   onReload: () => Promise<void>;
 }) {
   const [deleting, setDeleting] = useState(false);
@@ -233,13 +256,15 @@ function DestCard({
               <Select
                 value={editFrequency}
                 onChange={(e) => setEditFrequency(e.target.value)}
-                disabled={saving}
+                disabled={saving || allowedFrequencies.length <= 1}
               >
-                {Object.entries(FREQUENCY_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+                {Object.entries(FREQUENCY_LABEL)
+                  .filter(([value]) => allowedFrequencies.includes(value) || value === dest.pollingFrequency)
+                  .map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
               </Select>
             </div>
             <div className="space-y-1">
@@ -247,13 +272,15 @@ function DestCard({
               <Select
                 value={editDeliveryMode}
                 onChange={(e) => setEditDeliveryMode(e.target.value as DeliveryMode)}
-                disabled={saving}
+                disabled={saving || allowedDeliveryModes.length <= 1}
               >
-                {Object.entries(DELIVERY_MODE_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+                {Object.entries(DELIVERY_MODE_LABEL)
+                  .filter(([value]) => allowedDeliveryModes.includes(value as DeliveryMode) || value === dest.deliveryMode)
+                  .map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
               </Select>
               <p className="text-xs text-muted-foreground">
                 {DELIVERY_MODE_HELPER_TEXT[editDeliveryMode]}
@@ -388,19 +415,29 @@ function DestCard({
 
 function CreateDestForm({
   allowedChannels,
+  allowedFrequencies,
+  allowedDeliveryModes,
   onCreated,
   onCancel,
 }: {
   allowedChannels: string[];
+  allowedFrequencies: string[];
+  allowedDeliveryModes: DeliveryMode[];
   onCreated: () => Promise<void>;
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
   const [channel, setChannel] = useState(allowedChannels[0] ?? "discord_webhook");
   const [destinationUrl, setDestinationUrl] = useState("");
-  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("alert_fanout");
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>(
+    allowedDeliveryModes.includes("alert_fanout")
+      ? "alert_fanout"
+      : allowedDeliveryModes[0] ?? "digest",
+  );
   const [minimumSeverity, setMinimumSeverity] = useState("watch");
-  const [pollingFrequency, setPollingFrequency] = useState("1hr");
+  const [pollingFrequency, setPollingFrequency] = useState(
+    allowedFrequencies.includes("1hr") ? "1hr" : allowedFrequencies[0] ?? DAILY_DIGEST_FREQUENCY,
+  );
   const [xCreds, setXCreds] = useState({
     apiKey: "",
     apiSecret: "",
@@ -517,13 +554,15 @@ function CreateDestForm({
               id="dest-mode"
               value={deliveryMode}
               onChange={(e) => setDeliveryMode(e.target.value as DeliveryMode)}
-              disabled={loading}
+              disabled={loading || allowedDeliveryModes.length <= 1}
             >
-              {Object.entries(DELIVERY_MODE_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
+              {Object.entries(DELIVERY_MODE_LABEL)
+                .filter(([value]) => allowedDeliveryModes.includes(value as DeliveryMode))
+                .map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
             </Select>
             <p className="text-xs text-muted-foreground">{DELIVERY_MODE_HELPER_TEXT[deliveryMode]}</p>
           </div>
@@ -625,14 +664,21 @@ function CreateDestForm({
                 id="dest-frequency"
                 value={pollingFrequency}
                 onChange={(e) => setPollingFrequency(e.target.value)}
-                disabled={loading}
+                disabled={loading || allowedFrequencies.length <= 1}
               >
-                {Object.entries(FREQUENCY_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+                {Object.entries(FREQUENCY_LABEL)
+                  .filter(([value]) => allowedFrequencies.includes(value))
+                  .map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
               </Select>
+              {allowedFrequencies.length <= 1 && (
+                <p className="text-xs text-muted-foreground">
+                  Watch delivers a daily digest. Upgrade to Signal for per-cycle delivery.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="dest-severity">Minimum severity</Label>
@@ -1182,9 +1228,12 @@ function ManualDeliveryPanel({
 export default function DestinationsPage() {
   const { account } = useAccount();
   const plan = account.plan;
-  const limit = PLAN_LIMITS[plan] ?? 0;
-  const allowedChannels = PLAN_CHANNELS[plan] ?? [];
-  const liveEnabled = limit > 0;
+  const allowedChannels = getAllowedDestinationChannels(plan);
+  const allowedFrequencies = getAllowedFrequencies(plan);
+  const allowedDeliveryModes = getAllowedDeliveryModes(plan);
+  const destinationLimit = getDestinationLimit(plan);
+  const destinationsEnabled = canConfigurePrivateDestinations(plan);
+  const manualDeliveryEnabled = canRunManualDelivery(plan);
 
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1237,8 +1286,8 @@ export default function DestinationsPage() {
     };
   }, []);
 
-  const atLimit = limit !== Infinity && destinations.length >= limit;
-  const canAdd = liveEnabled && !atLimit;
+  const atDestinationLimit = destinations.length >= destinationLimit;
+  const canAdd = destinationsEnabled && !atDestinationLimit;
 
   return (
     <div className="max-w-7xl space-y-6">
@@ -1246,8 +1295,8 @@ export default function DestinationsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Delivery destinations</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {liveEnabled
-              ? `${destinations.length}${limit !== Infinity ? ` of ${limit}` : ""} destinations`
+            {destinationsEnabled
+              ? `${destinations.length}${Number.isFinite(destinationLimit) ? ` of ${destinationLimit}` : ""} destinations · ${getPlanLabel(plan)}`
               : "Not available on your current plan"}
           </p>
         </div>
@@ -1259,7 +1308,7 @@ export default function DestinationsPage() {
         )}
       </div>
 
-      {liveEnabled && (
+      {manualDeliveryEnabled && (
         <ManualDeliveryPanel
           onRunComplete={async () => {
             await loadDestinations();
@@ -1267,11 +1316,11 @@ export default function DestinationsPage() {
         />
       )}
 
-      {!liveEnabled && (
+      {!destinationsEnabled && (
         <Card className="border-violet-600/30 bg-violet-600/5">
           <CardContent className="py-4 px-4 flex items-center justify-between gap-4">
             <p className="text-sm">
-              Discord and Telegram delivery is available on Radar Live and above. X is available on Radar Pro and above.
+              Private alert delivery is available on Watch, Signal, and Desk. Intel does not include private alert destinations.
             </p>
             <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white shrink-0" asChild>
               <Link href="/dashboard/settings">
@@ -1282,17 +1331,27 @@ export default function DestinationsPage() {
         </Card>
       )}
 
-      {atLimit && (
-        <Card className="border-amber-500/40 bg-amber-50 dark:bg-amber-950/20">
-          <CardContent className="py-3 px-4 text-sm">
-            You&apos;ve reached your plan&apos;s destination limit. Upgrade to add more.
+      {destinationsEnabled && atDestinationLimit && !showForm && (
+        <Card className="border-violet-600/30 bg-violet-600/5">
+          <CardContent className="py-4 px-4 flex items-center justify-between gap-4">
+            <p className="text-sm">
+              You&apos;ve reached your plan&apos;s limit of {destinationLimit} delivery destination
+              {destinationLimit === 1 ? "" : "s"}. Upgrade to Signal to add more.
+            </p>
+            <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white shrink-0" asChild>
+              <Link href="/dashboard/settings">
+                Upgrade <ArrowRight className="ml-1 h-3 w-3" />
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       )}
 
-      {showForm && (
+      {showForm && destinationsEnabled && (
         <CreateDestForm
           allowedChannels={allowedChannels}
+          allowedFrequencies={allowedFrequencies}
+          allowedDeliveryModes={allowedDeliveryModes}
           onCreated={async () => {
             await loadDestinations();
             setShowForm(false);
@@ -1306,7 +1365,7 @@ export default function DestinationsPage() {
       ) : destinations.length === 0 && !showForm ? (
         <Card className="border-border/60">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            {liveEnabled
+            {destinationsEnabled
               ? "No delivery destinations yet. Add one to start receiving alerts."
               : "Upgrade your plan to configure delivery destinations."}
           </CardContent>
@@ -1317,6 +1376,8 @@ export default function DestinationsPage() {
             <DestCard
               key={destination.id}
               dest={destination}
+              allowedFrequencies={allowedFrequencies}
+              allowedDeliveryModes={allowedDeliveryModes}
               onReload={loadDestinations}
             />
           ))}

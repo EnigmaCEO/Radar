@@ -7,6 +7,13 @@ import { useAccount } from "@/lib/account-context";
 import { getRadarCatalog, listAlerts } from "@/lib/api";
 import { isCoverageGapAlert } from "@/lib/alert-classification";
 import {
+  allowsPrivateWatchlists,
+  canConfigurePrivateDestinations,
+  getPlanLabel,
+  getPrivateHistoryDays,
+  resolvePlan,
+} from "@/lib/plan-limits";
+import {
   EMPTY_DASHBOARD_ALERT_SUMMARY,
   loadDashboardAlertSummary,
 } from "@/lib/alert-feed";
@@ -14,7 +21,7 @@ import { formatAlertLifecycle } from "@/lib/alert-time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDate } from "@/lib/utils";
+import { LocalDateTime } from "@/components/local-time";
 
 function SeverityBadge({ severity }: { severity: string }) {
   const variant =
@@ -34,6 +41,19 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function CoverageStatusBadge({ status }: { status: string }) {
+  const label = status === "resolved" ? "restored" : status === "superseded" ? "superseded" : "active";
+  const className =
+    status === "resolved"
+      ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+      : status === "superseded"
+        ? "border border-slate-500/20 bg-slate-500/10 text-slate-300"
+        : "border border-primary/20 bg-primary/10 text-primary";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${className}`}>{label}</span>
+  );
+}
+
 type ObservabilityState = {
   totalObjects: number;
   observableObjects: number;
@@ -42,6 +62,8 @@ type ObservabilityState = {
 
 export default function DashboardPage() {
   const { account } = useAccount();
+  const resolvedPlan = resolvePlan(account.plan);
+  const privateHistoryDays = getPrivateHistoryDays(account.plan);
   const [alertSummary, setAlertSummary] = useState(EMPTY_DASHBOARD_ALERT_SUMMARY);
   const [observability, setObservability] = useState<ObservabilityState>(null);
   const [loading, setLoading] = useState(true);
@@ -107,7 +129,7 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold tracking-tight">Overview</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {account.name || "Your account"} -{" "}
-          <span className="font-medium capitalize">{account.plan.replace("_", " ")}</span>
+          <span className="font-medium">{getPlanLabel(account.plan)}</span>
         </p>
       </div>
 
@@ -153,7 +175,7 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Plan</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold capitalize">{account.plan.replace("_", " ")}</div>
+            <div className="text-xl font-bold">{getPlanLabel(account.plan)}</div>
             <div className="mt-1 text-xs capitalize text-muted-foreground">{account.status}</div>
           </CardContent>
         </Card>
@@ -166,39 +188,35 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {account.plan === "managed"
-                ? 365
-                : account.plan === "radar_pro"
-                  ? 30
-                  : account.plan === "radar_live"
-                    ? 7
-                    : 1}
+              {privateHistoryDays === null ? "Contract" : privateHistoryDays}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">days</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {privateHistoryDays === null ? "history window" : "days"}
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {account.plan !== "managed" &&
+      {resolvedPlan !== "desk" &&
         (() => {
           const next =
-            account.plan === "free"
-              ? "radar_live"
-              : account.plan === "radar_live"
-                ? "radar_pro"
-                : "managed";
+            resolvedPlan === "public_record"
+              ? "watch"
+              : resolvedPlan === "watch"
+                ? "radar_signal"
+                : "desk";
           const labels: Record<string, [string, string]> = {
-            radar_live: [
-              "Upgrade to Radar Live",
-              "Get watchlists, real-time Discord and Telegram delivery.",
+            watch: [
+              "Upgrade to Watch",
+              "Track up to 5 private objects and receive direct push alerts.",
             ],
-            radar_pro: [
-              "Upgrade to Radar Pro",
-              "10 watchlists, 10 destinations, webhooks, 30-day history.",
+            radar_signal: [
+              "Upgrade to Signal",
+              "Correlate private exposure across up to 25 objects with webhook delivery and 90-day history.",
             ],
-            managed: [
-              "Managed plan",
-              "Unlimited everything, 365-day history, dedicated support.",
+            desk: [
+              "Move to Desk",
+              "Contracted monitoring, raw history, signed receipts, and human review.",
             ],
           };
           const [title, desc] = labels[next];
@@ -210,13 +228,13 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium">{title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>
                 </div>
-                {next === "managed" ? (
+                {next === "desk" ? (
                   <Button
                     size="sm"
                     className="bg-violet-600 text-white hover:bg-violet-700"
                     asChild
                   >
-                    <a href="mailto:radar@sagitta.systems?subject=Radar Managed Plan">
+                    <a href="mailto:radar@sagitta.systems?subject=Radar Desk Plan">
                       Talk to us <ArrowRight className="ml-1 h-3 w-3" />
                     </a>
                   </Button>
@@ -241,6 +259,14 @@ export default function DashboardPage() {
             </Card>
           );
         })()}
+
+      {!allowsPrivateWatchlists(account.plan) && (
+        <Card className="border-border/60">
+          <CardContent className="pt-6 text-sm text-muted-foreground">
+            Private object monitoring starts on Watch. Public Record and Intel do not include private watchlists.
+          </CardContent>
+        </Card>
+      )}
 
       <div>
         <div className="mb-3 flex items-center justify-between gap-4">
@@ -285,13 +311,18 @@ export default function DashboardPage() {
                       <p className="truncate text-sm font-medium">{alert.summary}</p>
                       <p className="text-xs text-muted-foreground">
                         {isCoverageGapAlert(alert) ? "coverage gap" : alert.monitorType} -{" "}
-                        {formatDate(alert.openedAt ?? alert.createdAt)} - {formatAlertLifecycle(alert)}
+                        <LocalDateTime value={alert.openedAt ?? alert.createdAt} preset="compact" /> -{" "}
+                        {formatAlertLifecycle(alert)}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {!isCoverageGapAlert(alert) && <SeverityBadge severity={alert.severity} />}
-                    <StatusBadge status={alert.status} />
+                    {isCoverageGapAlert(alert) ? (
+                      <CoverageStatusBadge status={alert.status} />
+                    ) : (
+                      <StatusBadge status={alert.status} />
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -307,7 +338,7 @@ export default function DashboardPage() {
               <Eye className="h-5 w-5 text-violet-500" />
               <div>
                 <p className="text-sm font-medium">Manage watchlists</p>
-                <p className="text-xs text-muted-foreground">Filter alerts to your dependencies</p>
+                <p className="text-xs text-muted-foreground">Organize your private monitored objects</p>
               </div>
             </CardContent>
           </Link>
@@ -319,7 +350,9 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm font-medium">Delivery destinations</p>
                 <p className="text-xs text-muted-foreground">
-                  Configure Discord, Telegram, or webhook
+                  {canConfigurePrivateDestinations(account.plan)
+                    ? "Configure Discord, Telegram, or webhook delivery"
+                    : "Available on private monitoring plans"}
                 </p>
               </div>
             </CardContent>

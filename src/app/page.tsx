@@ -7,11 +7,13 @@ import { getMonitoredValueUsd, formatUsd } from "@/lib/radar-stats";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
-function buildSignupHref(plan?: "radar_live" | "radar_pro") {
-  if (!plan) return "/auth/login?screen_hint=signup";
+// New users are returned to /pricing, which auto-starts Stripe checkout for the
+// selected plan once they authenticate.
+function buildSignupHref(plan?: "watch" | "radar_intel" | "radar_signal") {
+  const returnTo = plan ? `/pricing?plan=${plan}` : "/pricing";
   const params = new URLSearchParams({
     screen_hint: "signup",
-    returnTo: `/dashboard/settings?upgrade=${plan}`,
+    returnTo,
   });
   return `/login?${params.toString()}`;
 }
@@ -19,30 +21,30 @@ function buildSignupHref(plan?: "radar_live" | "radar_pro") {
 // ── Sample signal feed ───────────────────────────────────────────────────────
 
 const SEV_COLOR: Record<string, string> = {
-  watch:    "bg-yellow-400",
-  warning:  "bg-orange-400",
+  watch: "bg-yellow-400",
+  warning: "bg-orange-400",
   critical: "bg-red-500",
-  info:     "bg-purple-400",
+  info: "bg-purple-400",
 };
 
 const SEV_TEXT: Record<string, string> = {
-  watch:    "text-yellow-400",
-  warning:  "text-orange-400",
+  watch: "text-yellow-400",
+  warning: "text-orange-400",
   critical: "text-red-400",
-  info:     "text-purple-400",
+  info: "text-purple-400",
 };
 
 const signals = [
-  { sev: "watch",    msg: "Chainlink ETH/USD deviation watch",            src: "oracle",  age: "2m ago"  },
-  { sev: "warning",  msg: "Wormhole route latency elevated",              src: "bridge",  age: "7m ago"  },
-  { sev: "watch",    msg: "Curve pool imbalance detected",                src: "lp",      age: "12m ago" },
-  { sev: "warning",  msg: "Across route pressure increased",              src: "bridge",  age: "18m ago" },
-  { sev: "info",     msg: "Daily briefing generated · 08:00 UTC",         src: "system",  age: "1h ago"  },
-  { sev: "critical", msg: "Chronicle WBTC/USD deviation threshold hit",   src: "oracle",  age: "45m ago" },
-  { sev: "watch",    msg: "LayerZero route congestion detected",          src: "bridge",  age: "31m ago" },
-  { sev: "info",     msg: "Pyth SOL/USD heartbeat nominal",               src: "oracle",  age: "4m ago"  },
-  { sev: "warning",  msg: "Uniswap v3 ETH/USDC depth dropped 22%",       src: "lp",      age: "53m ago" },
-  { sev: "watch",    msg: "RedStone BTC/USD freshness within threshold",  src: "oracle",  age: "9m ago"  },
+  { sev: "watch", msg: "Chainlink ETH/USD deviation watch", src: "oracle", age: "2m ago" },
+  { sev: "warning", msg: "Wormhole route latency elevated", src: "bridge", age: "7m ago" },
+  { sev: "watch", msg: "Curve pool imbalance detected", src: "lp", age: "12m ago" },
+  { sev: "warning", msg: "Across route pressure increased", src: "bridge", age: "18m ago" },
+  { sev: "info", msg: "Daily briefing generated · 08:00 UTC", src: "system", age: "1h ago" },
+  { sev: "critical", msg: "Chronicle WBTC/USD deviation threshold hit", src: "oracle", age: "45m ago" },
+  { sev: "watch", msg: "LayerZero route congestion detected", src: "bridge", age: "31m ago" },
+  { sev: "info", msg: "Pyth SOL/USD heartbeat nominal", src: "oracle", age: "4m ago" },
+  { sev: "warning", msg: "Uniswap v3 ETH/USDC depth dropped 22%", src: "lp", age: "53m ago" },
+  { sev: "watch", msg: "RedStone BTC/USD freshness within threshold", src: "oracle", age: "9m ago" },
 ];
 
 // ── Features ─────────────────────────────────────────────────────────────────
@@ -90,66 +92,73 @@ const features = [
 
 const plans = [
   {
-    name: "Free",
-    slug: "free",
-    price: "$0",
-    priceSub: "forever",
-    description: "Daily briefs and read-only alert feed. No card required.",
+    name: "Watch",
+    slug: "watch",
+    price: "$29",
+    priceSub: "/mo",
+    description: "Personal monitoring for selected infrastructure objects.",
     tag: null,
-    features: ["Daily signal briefings", "Public alert feed", "1-day alert history", "1 webhook destination"],
-    cta: "Start free",
-    ctaHref: buildSignupHref(),
+    features: [
+      "Up to 5 watchlist objects",
+      "Telegram & Discord alerts",
+      "7-day event history",
+    ],
+    cta: "Get started",
+    ctaHref: buildSignupHref("watch"),
     highlight: false,
   },
   {
-    name: "Radar Live",
-    slug: "radar_live",
-    price: "$49",
+    name: "Intel",
+    slug: "radar_intel",
+    price: "$99",
     priceSub: "/mo",
-    description: "Small team or single protocol. Discord and Telegram delivery.",
-    tag: "Most popular",
+    description: "Aggregate Radar intelligence without private monitoring.",
+    tag: null,
     features: [
-      "Everything in Free",
-      "3 custom watchlists",
-      "Discord & Telegram alerts",
-      "2 delivery destinations",
-      "7-day alert history",
+      "Provider reliability scores",
+      "Infrastructure health trends",
+      "Weekly & monthly reports",
+      "Deep aggregate history",
+      "Aggregate CSV exports",
     ],
     cta: "Get started",
-    ctaHref: buildSignupHref("radar_live"),
+    ctaHref: buildSignupHref("radar_intel"),
+    highlight: false,
+  },
+  {
+    name: "Signal",
+    slug: "radar_signal",
+    price: "$149",
+    priceSub: "/mo",
+    description: "Private exposure monitoring with correlation and delivery.",
+    tag: "Core product",
+    features: [
+      "Up to 25 watchlist objects",
+      {
+        label: "Correlation & exposure groups",
+        detail: "Know when related parts of your position break together.",
+      },
+      "Telegram, Discord & webhook alerts",
+      "90-day event history",
+    ],
+    cta: "Get started",
+    ctaHref: buildSignupHref("radar_signal"),
     highlight: true,
   },
   {
-    name: "Radar Pro",
-    slug: "radar_pro",
-    price: "$199",
+    name: "Desk",
+    slug: "desk",
+    price: "From $2,500",
     priceSub: "/mo",
-    description: "Multi-protocol teams. X (Twitter) broadcast and full delivery suite.",
+    description: "Institutional state data, review, and integration.",
     tag: null,
     features: [
-      "Everything in Radar Live",
-      "10 custom watchlists",
-      "X (Twitter) delivery",
-      "10 delivery destinations",
-      "30-day alert history",
-    ],
-    cta: "Get started",
-    ctaHref: buildSignupHref("radar_pro"),
-    highlight: false,
-  },
-  {
-    name: "Managed",
-    slug: "managed",
-    price: "Custom",
-    priceSub: "pricing",
-    description: "Full-service for funds, protocols, and ops teams.",
-    tag: null,
-    features: [
-      "Everything in Pro",
-      "Unlimited watchlists",
-      "Unlimited destinations",
-      "365-day alert history",
-      "Dedicated support",
+      "Full raw event history",
+      "API access",
+      "Custom monitoring",
+      "Support SLA",
+      "Alert exporting",
+      "Custom reporting",
     ],
     cta: "Talk to us",
     ctaHref: "/request-access",
@@ -160,24 +169,24 @@ const plans = [
 // ── Coverage ──────────────────────────────────────────────────────────────────
 
 const coverage = [
-  { label: "Chainlink",    type: "oracle" },
-  { label: "Pyth",         type: "oracle" },
-  { label: "Chronicle",    type: "oracle" },
-  { label: "RedStone",     type: "oracle" },
-  { label: "CCIP",         type: "bridge" },
-  { label: "Across",       type: "bridge" },
-  { label: "Wormhole",     type: "bridge" },
-  { label: "LayerZero",    type: "bridge" },
-  { label: "Uniswap v3",   type: "lp" },
-  { label: "Curve",        type: "lp" },
-  { label: "Aerodrome",    type: "lp" },
-  { label: "Aave",         type: "lp" },
+  { label: "Chainlink", type: "oracle" },
+  { label: "Pyth", type: "oracle" },
+  { label: "Chronicle", type: "oracle" },
+  { label: "RedStone", type: "oracle" },
+  { label: "CCIP", type: "bridge" },
+  { label: "Across", type: "bridge" },
+  { label: "Wormhole", type: "bridge" },
+  { label: "LayerZero", type: "bridge" },
+  { label: "Uniswap v3", type: "lp" },
+  { label: "Curve", type: "lp" },
+  { label: "Aerodrome", type: "lp" },
+  { label: "Aave", type: "lp" },
 ];
 
 const TYPE_CHIP: Record<string, string> = {
   oracle: "border-yellow-500/25 bg-yellow-500/5 text-yellow-300/80",
   bridge: "border-purple-500/25 bg-purple-500/5 text-purple-300/80",
-  lp:     "border-green-500/25  bg-green-500/5  text-green-300/80",
+  lp: "border-green-500/25  bg-green-500/5  text-green-300/80",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,7 +201,6 @@ export default async function LandingPage() {
       <section className="relative overflow-hidden bg-[#07060f] py-28 md:py-40">
         {/* Radar visual */}
         <div aria-hidden className="pointer-events-none absolute inset-0">
-
           {/* Concentric rings */}
           <div className="absolute inset-0 flex items-center justify-center">
             {[180, 300, 420, 540, 660].map((size, i) => (
@@ -229,39 +237,73 @@ export default async function LandingPage() {
           />
 
           {/* Sweep arm */}
-          <div
-            className="radar-sweep absolute"
-            style={{ left: "50%", top: "50%", transformOrigin: "0 0" }}
-          >
-            <div style={{ position: "absolute", bottom: 0, left: -10, width: 20, height: 330, background: "linear-gradient(to bottom, hsl(268 85% 72%), transparent)", filter: "blur(10px)", opacity: 0.55 }} />
-            <div style={{ position: "absolute", bottom: 0, left: -4, width: 8, height: 350, background: "linear-gradient(to bottom, hsl(268 85% 80%), hsl(268 70% 60% / 0.4), transparent)", filter: "blur(3px)", opacity: 0.8 }} />
-            <div style={{ position: "absolute", bottom: 0, left: -1, width: 2, height: 350, background: "linear-gradient(to bottom, #fff 0%, hsl(268 85% 82%) 40%, hsl(268 70% 60% / 0.3) 80%, transparent 100%)" }} />
-            <div style={{ position: "absolute", bottom: 342, left: -6, width: 12, height: 12, borderRadius: "50%", background: "white", boxShadow: "0 0 6px 2px hsl(268 85% 80%), 0 0 18px 6px hsl(268 85% 65% / 0.7), 0 0 40px 12px hsl(268 85% 55% / 0.3)" }} />
+          <div className="radar-sweep absolute" style={{ left: "50%", top: "50%", transformOrigin: "0 0" }}>
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: -10,
+                width: 20,
+                height: 330,
+                background: "linear-gradient(to bottom, hsl(268 85% 72%), transparent)",
+                filter: "blur(10px)",
+                opacity: 0.55,
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: -4,
+                width: 8,
+                height: 350,
+                background: "linear-gradient(to bottom, hsl(268 85% 80%), hsl(268 70% 60% / 0.4), transparent)",
+                filter: "blur(3px)",
+                opacity: 0.8,
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: -1,
+                width: 2,
+                height: 350,
+                background: "linear-gradient(to bottom, #fff 0%, hsl(268 85% 82%) 40%, hsl(268 70% 60% / 0.3) 80%, transparent 100%)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: 342,
+                left: -6,
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                background: "white",
+                boxShadow:
+                  "0 0 6px 2px hsl(268 85% 80%), 0 0 18px 6px hsl(268 85% 65% / 0.7), 0 0 40px 12px hsl(268 85% 55% / 0.3)",
+              }}
+            />
           </div>
 
           {/* Blips — sweep delay calculated from atan2(dx, -dy)/2π×4s */}
           {([
-            // Gold / oracle signals — persistent phosphor
-            { x: "calc(50% + 162px)", y: "calc(50% - 88px)",  color: "#f5c842",           r: 5,   sweepDelay: "0.68s", drift: "a", driftDur: 28, driftOff: "0s",   flash: false },
-            { x: "calc(50% + 72px)",  y: "calc(50% + 222px)", color: "#f5c842",           r: 4,   sweepDelay: "1.80s", drift: "c", driftDur: 38, driftOff: "-15s", flash: false },
-            { x: "calc(50% - 185px)", y: "calc(50% + 150px)", color: "#f5c842",           r: 3,   sweepDelay: "2.57s", drift: "a", driftDur: 35, driftOff: "-12s", flash: false },
-            { x: "calc(50% + 305px)", y: "calc(50% + 90px)",  color: "#f5c842",           r: 4,   sweepDelay: "1.18s", drift: "c", driftDur: 33, driftOff: "-5s",  flash: false },
-            // Gold — flash: invisible between sweeps
-            { x: "calc(50% + 248px)", y: "calc(50% - 22px)",  color: "#f5c842",           r: 3.5, sweepDelay: "0.94s", drift: "b", driftDur: 32, driftOff: "-8s",  flash: true  },
-            { x: "calc(50% + 110px)", y: "calc(50% + 145px)", color: "#f5c842",           r: 3,   sweepDelay: "1.59s", drift: "d", driftDur: 42, driftOff: "-22s", flash: true  },
-            // Purple / bridge signals — persistent phosphor
-            { x: "calc(50% - 102px)", y: "calc(50% - 198px)", color: "hsl(268 85% 75%)", r: 4,   sweepDelay: "3.70s", drift: "b", driftDur: 45, driftOff: "-18s", flash: false },
-            { x: "calc(50% - 280px)", y: "calc(50% - 110px)", color: "hsl(268 85% 72%)", r: 3,   sweepDelay: "3.24s", drift: "d", driftDur: 37, driftOff: "-20s", flash: false },
-            { x: "calc(50% - 145px)", y: "calc(50% - 270px)", color: "hsl(268 85% 73%)", r: 3,   sweepDelay: "3.69s", drift: "b", driftDur: 40, driftOff: "-25s", flash: false },
-            // Purple — flash
-            { x: "calc(50% - 228px)", y: "calc(50% + 48px)",  color: "hsl(268 85% 70%)", r: 3.5, sweepDelay: "2.87s", drift: "c", driftDur: 30, driftOff: "-9s",  flash: true  },
-            { x: "calc(50% - 60px)",  y: "calc(50% + 305px)", color: "hsl(268 85% 70%)", r: 3.5, sweepDelay: "2.12s", drift: "a", driftDur: 28, driftOff: "-3s",  flash: true  },
-            { x: "calc(50% + 170px)", y: "calc(50% + 255px)", color: "hsl(268 85% 75%)", r: 3,   sweepDelay: "1.63s", drift: "d", driftDur: 36, driftOff: "-11s", flash: true  },
+            { x: "calc(50% + 162px)", y: "calc(50% - 88px)", color: "#f5c842", r: 5, sweepDelay: "0.68s", drift: "a", driftDur: 28, driftOff: "0s", flash: false },
+            { x: "calc(50% + 72px)", y: "calc(50% + 222px)", color: "#f5c842", r: 4, sweepDelay: "1.80s", drift: "c", driftDur: 38, driftOff: "-15s", flash: false },
+            { x: "calc(50% - 185px)", y: "calc(50% + 150px)", color: "#f5c842", r: 3, sweepDelay: "2.57s", drift: "a", driftDur: 35, driftOff: "-12s", flash: false },
+            { x: "calc(50% + 305px)", y: "calc(50% + 90px)", color: "#f5c842", r: 4, sweepDelay: "1.18s", drift: "c", driftDur: 33, driftOff: "-5s", flash: false },
+            { x: "calc(50% + 248px)", y: "calc(50% - 22px)", color: "#f5c842", r: 3.5, sweepDelay: "0.94s", drift: "b", driftDur: 32, driftOff: "-8s", flash: true },
+            { x: "calc(50% + 110px)", y: "calc(50% + 145px)", color: "#f5c842", r: 3, sweepDelay: "1.59s", drift: "d", driftDur: 42, driftOff: "-22s", flash: true },
+            { x: "calc(50% - 102px)", y: "calc(50% - 198px)", color: "hsl(268 85% 75%)", r: 4, sweepDelay: "3.70s", drift: "b", driftDur: 45, driftOff: "-18s", flash: false },
+            { x: "calc(50% - 280px)", y: "calc(50% - 110px)", color: "hsl(268 85% 72%)", r: 3, sweepDelay: "3.24s", drift: "d", driftDur: 37, driftOff: "-20s", flash: false },
+            { x: "calc(50% - 145px)", y: "calc(50% - 270px)", color: "hsl(268 85% 73%)", r: 3, sweepDelay: "3.69s", drift: "b", driftDur: 40, driftOff: "-25s", flash: false },
+            { x: "calc(50% - 228px)", y: "calc(50% + 48px)", color: "hsl(268 85% 70%)", r: 3.5, sweepDelay: "2.87s", drift: "c", driftDur: 30, driftOff: "-9s", flash: true },
+            { x: "calc(50% - 60px)", y: "calc(50% + 305px)", color: "hsl(268 85% 70%)", r: 3.5, sweepDelay: "2.12s", drift: "a", driftDur: 28, driftOff: "-3s", flash: true },
+            { x: "calc(50% + 170px)", y: "calc(50% + 255px)", color: "hsl(268 85% 75%)", r: 3, sweepDelay: "1.63s", drift: "d", driftDur: 36, driftOff: "-11s", flash: true },
           ] as const).map((b, i) => (
             <div key={i} className="absolute" style={{ left: b.x, top: b.y }}>
-              {/* Drift layer — slow position wander */}
               <div style={{ animation: `radar-drift-${b.drift} ${b.driftDur}s ease-in-out ${b.driftOff} infinite` }}>
-                {/* Centering layer */}
                 <div style={{ transform: "translate(-50%, -50%)" }}>
                   <div
                     className="absolute rounded-full animate-ping"
@@ -285,12 +327,18 @@ export default async function LandingPage() {
 
           {/* Center dot */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-2.5 w-2.5 rounded-full gold-pulse" style={{ background: "#f5c842", boxShadow: "0 0 8px 3px #f5c84288, 0 0 20px 6px #f5c84244" }} />
+            <div
+              className="h-2.5 w-2.5 rounded-full gold-pulse"
+              style={{ background: "#f5c842", boxShadow: "0 0 8px 3px #f5c84288, 0 0 20px 6px #f5c84244" }}
+            />
           </div>
         </div>
 
         {/* Subtle grid */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#ffffff06_1px,transparent_1px),linear-gradient(to_bottom,#ffffff06_1px,transparent_1px)] bg-[size:48px_48px]" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#ffffff06_1px,transparent_1px),linear-gradient(to_bottom,#ffffff06_1px,transparent_1px)] bg-[size:48px_48px]"
+        />
 
         <div className="container relative mx-auto max-w-screen-xl px-4">
           <div className="mx-auto max-w-3xl text-center">
@@ -310,23 +358,18 @@ export default async function LandingPage() {
               Real-time monitoring for every oracle, bridge, and pool your protocol depends on.
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-400">
-              Radar watches the infrastructure your protocol depends on and delivers actionable
-              alerts to Discord, Telegram, or webhook before issues become user-facing.
+              Radar watches the infrastructure your protocol depends on and delivers actionable alerts to Discord, Telegram, or webhook before issues become user-facing.
             </p>
 
             <div className="mt-10 flex flex-col items-center gap-1">
-              <span className="text-6xl font-bold tracking-tight text-amber-400 md:text-7xl">
-                {monitoredUsd}
-              </span>
-              <span className="text-sm font-medium uppercase tracking-widest text-slate-500">
-                DeFi infrastructure monitored
-              </span>
+              <span className="text-6xl font-bold tracking-tight text-amber-400 md:text-7xl">{monitoredUsd}</span>
+              <span className="text-sm font-medium uppercase tracking-widest text-slate-500">DeFi infrastructure monitored</span>
             </div>
 
             <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white" asChild>
                 <a href="/auth/login">
-                  Get started free <ArrowRight className="ml-2 h-4 w-4" />
+                  Get started <ArrowRight className="ml-2 h-4 w-4" />
                 </a>
               </Button>
               <Button size="lg" variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white hover:border-white/25" asChild>
@@ -342,16 +385,14 @@ export default async function LandingPage() {
         <div className="relative overflow-hidden border-y border-white/[0.06]">
           {/* Left label */}
           <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center">
-            <div className="flex items-center gap-2 bg-[#07060f] pl-4 pr-4 h-full border-r border-white/[0.06]">
+            <div className="flex h-full items-center gap-2 border-r border-white/[0.06] bg-[#07060f] pl-4 pr-4">
               <span className="relative flex h-2 w-2 shrink-0">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
               </span>
-              <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                Example signal feed
-              </span>
+              <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-widest text-slate-500">Example signal feed</span>
             </div>
-            <div className="w-12 h-full bg-gradient-to-r from-[#07060f] to-transparent" />
+            <div className="h-full w-12 bg-gradient-to-r from-[#07060f] to-transparent" />
           </div>
 
           {/* Right fade */}
@@ -360,13 +401,15 @@ export default async function LandingPage() {
           {/* Scrolling track */}
           <div className="marquee-track py-2.5 pl-52">
             {[...signals, ...signals].map((s, i) => (
-              <span key={i} className="inline-flex items-center gap-2 px-7 whitespace-nowrap">
-                <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${SEV_COLOR[s.sev]}`} />
-                <span className={`text-xs font-medium ${SEV_TEXT[s.sev]}`}>{s.msg}</span>
-                <span className="text-slate-700">·</span>
-                <span className="font-mono text-[10px] uppercase tracking-wide text-slate-600">{s.src}</span>
-                <span className="text-slate-700">·</span>
-                <span className="text-[10px] text-slate-600">{s.age}</span>
+              <span key={i} className="inline-flex whitespace-nowrap px-7">
+                <span className="flex items-center gap-2">
+                  <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${SEV_COLOR[s.sev]}`} />
+                  <span className={`text-xs font-medium ${SEV_TEXT[s.sev]}`}>{s.msg}</span>
+                  <span className="text-slate-700">·</span>
+                  <span className="font-mono text-[10px] uppercase tracking-wide text-slate-600">{s.src}</span>
+                  <span className="text-slate-700">·</span>
+                  <span className="text-[10px] text-slate-600">{s.age}</span>
+                </span>
               </span>
             ))}
           </div>
@@ -378,10 +421,10 @@ export default async function LandingPage() {
         <div className="container mx-auto max-w-screen-xl px-4">
           <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
             {[
-              { stat: "12+",              label: "Infrastructure sources tracked" },
-              { stat: "3 alert types",    label: "Watch · Warning · Critical" },
-              { stat: "3 channels",       label: "Discord, Telegram & webhook" },
-              { stat: "Daily + live",     label: "Briefings and real-time alerts" },
+              { stat: "12+", label: "Infrastructure sources tracked" },
+              { stat: "3 alert types", label: "Watch · Warning · Critical" },
+              { stat: "3 channels", label: "Discord, Telegram & webhook" },
+              { stat: "Daily + live", label: "Briefings and real-time alerts" },
             ].map((item) => (
               <div key={item.stat} className="text-center">
                 <div className="text-lg font-bold text-amber-400">{item.stat}</div>
@@ -390,9 +433,7 @@ export default async function LandingPage() {
             ))}
           </div>
           <div className="mt-8 border-t border-white/[0.05] pt-8">
-            <p className="mb-4 text-center text-[10px] font-semibold uppercase tracking-widest text-slate-600">
-              Built for
-            </p>
+            <p className="mb-4 text-center text-[10px] font-semibold uppercase tracking-widest text-slate-600">Built for</p>
             <div className="flex flex-wrap justify-center gap-2">
               {["DeFi protocols", "Risk teams", "Ops teams", "Treasuries", "Funds"].map((b) => (
                 <span key={b} className="rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-1.5 text-xs text-slate-400">
@@ -407,22 +448,15 @@ export default async function LandingPage() {
       {/* ── Coverage ──────────────────────────────────────────────────────── */}
       <section className="border-b border-white/5 bg-[#0b0a17] py-7">
         <div className="container mx-auto max-w-screen-xl px-4">
-          <p className="mb-4 text-center text-xs font-semibold uppercase tracking-widest text-slate-600">
-            Coverage includes
-          </p>
+          <p className="mb-4 text-center text-xs font-semibold uppercase tracking-widest text-slate-600">Coverage includes</p>
           <div className="flex flex-wrap justify-center gap-2">
             {coverage.map((c) => (
-              <span
-                key={c.label}
-                className={`rounded-md border px-3 py-1.5 text-xs font-medium ${TYPE_CHIP[c.type]}`}
-              >
+              <span key={c.label} className={`rounded-md border px-3 py-1.5 text-xs font-medium ${TYPE_CHIP[c.type]}`}>
                 {c.label}
               </span>
             ))}
           </div>
-          <p className="mt-4 text-center text-[11px] text-slate-600">
-            Oracles · Bridges · Liquidity pools · More coverage added regularly
-          </p>
+          <p className="mt-4 text-center text-[11px] text-slate-600">Oracles · Bridges · Liquidity pools · More coverage added regularly</p>
         </div>
       </section>
 
@@ -430,12 +464,9 @@ export default async function LandingPage() {
       <section id="features" className="bg-background py-24">
         <div className="container mx-auto max-w-screen-xl px-4">
           <div className="mb-14 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-              Every signal that matters, nothing that doesn&apos;t
-            </h2>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">Every signal that matters, nothing that doesn&apos;t</h2>
             <p className="mt-4 text-muted-foreground">
-              Radar monitors the infrastructure your DeFi protocol depends on — and filters to
-              only what your team needs to act on.
+              Radar monitors the infrastructure your DeFi protocol depends on — and filters to only what your team needs to act on.
             </p>
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -460,50 +491,46 @@ export default async function LandingPage() {
       <section id="pricing" className="border-t border-border bg-muted/40 py-24">
         <div className="container mx-auto max-w-screen-xl px-4">
           <div className="mb-14 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-              Plans for every team
-            </h2>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">Plans for every team</h2>
             <p className="mt-4 text-muted-foreground">
-              Start with a daily brief. Scale to real-time delivery when you need it.
+              Choose how Radar serves you: monitor objects, study infrastructure trends, correlate private exposure, or integrate verified state data into your systems.
             </p>
           </div>
           <div className="grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => (
               <Card
                 key={plan.slug}
-                className={
-                  plan.highlight
-                    ? "flex flex-col border-2 border-violet-600 bg-card"
-                    : "flex flex-col border border-border bg-card shadow-sm"
-                }
+                className={plan.highlight ? "flex flex-col border-2 border-violet-600 bg-card" : "flex flex-col border border-border bg-card shadow-sm"}
               >
                 <CardHeader className="pb-4">
-                  {/* Reserved tag slot — keeps name/price aligned across all cards */}
-                  <div className="h-6 flex items-center">
-                    {plan.tag && (
-                      <span className="inline-flex items-center rounded-full bg-violet-600 px-2.5 py-0.5 text-xs font-semibold text-white">
-                        {plan.tag}
-                      </span>
-                    )}
+                  <div className="flex h-6 items-center">
+                    {plan.tag && <span className="inline-flex items-center rounded-full bg-violet-600 px-2.5 py-0.5 text-xs font-semibold text-white">{plan.tag}</span>}
                   </div>
                   <CardTitle className="text-base text-foreground">{plan.name}</CardTitle>
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-bold text-foreground">{plan.price}</span>
                     <span className="text-sm text-muted-foreground">{plan.priceSub}</span>
                   </div>
-                  <CardDescription className="min-h-[2.75rem] text-sm leading-snug">
-                    {plan.description}
-                  </CardDescription>
+                  <CardDescription className="min-h-[2.75rem] text-sm leading-snug">{plan.description}</CardDescription>
                 </CardHeader>
 
                 <CardContent className="flex-1 pb-4">
                   <ul className="space-y-2">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-sm text-foreground">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                        {f}
-                      </li>
-                    ))}
+                    {plan.features.map((f) => {
+                      const label = typeof f === "string" ? f : f.label;
+                      const detail = typeof f === "string" ? null : f.detail;
+                      return (
+                        <li key={label} className="flex items-start gap-2 text-sm text-foreground">
+                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                          <span>
+                            {label}
+                            {detail && (
+                              <span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span>
+                            )}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </CardContent>
 
@@ -523,9 +550,7 @@ export default async function LandingPage() {
               </Card>
             ))}
           </div>
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            Billing managed via Stripe. Cancel or change plan anytime.
-          </p>
+          <p className="mt-6 text-center text-xs text-muted-foreground">Billing managed via Stripe. Cancel or change plan anytime.</p>
         </div>
       </section>
 
@@ -537,21 +562,17 @@ export default async function LandingPage() {
           ))}
         </div>
         <div className="container relative mx-auto max-w-screen-xl px-4 text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-white md:text-4xl">
-            Ready to watch your infrastructure?
-          </h2>
-          <p className="mt-4 text-slate-400">
-            Sign up free in seconds. Upgrade when you need real-time delivery.
-          </p>
+          <h2 className="text-3xl font-bold tracking-tight text-white md:text-4xl">Ready to watch your infrastructure?</h2>
+          <p className="mt-4 text-slate-400">Set up in minutes. Pick the plan that matches your delivery needs.</p>
           <div className="mt-8 flex flex-col items-center gap-3">
             <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white" asChild>
               <a href="/auth/login?screen_hint=signup">
-                Get started free <ArrowRight className="ml-2 h-4 w-4" />
+                Get started <ArrowRight className="ml-2 h-4 w-4" />
               </a>
             </Button>
             <p className="text-sm text-slate-500">
               Already have an account?{" "}
-              <a href="/auth/login" className="text-purple-400 hover:text-purple-300 underline underline-offset-4">
+              <a href="/auth/login" className="text-purple-400 underline underline-offset-4 hover:text-purple-300">
                 Sign in
               </a>
             </p>

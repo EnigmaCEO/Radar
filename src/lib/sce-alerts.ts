@@ -35,6 +35,12 @@ export interface SceAlert {
   thresholdName?: string | null;
   observedValueLabel?: string | null;
   thresholdValueLabel?: string | null;
+  declaredHeartbeatSeconds?: number | null;
+  appliedThresholdSeconds?: number | null;
+  appliedThresholdKind?: string | null;
+  thresholdSourceLabel?: string | null;
+  evidenceState?: string | null;
+  publicVerificationState?: string | null;
   lastSuccessfulObservationAt?: string | null;
   lastObservationAttemptAt?: string | null;
   consecutiveFailedCycles?: number | null;
@@ -87,6 +93,12 @@ export interface SceAlertLedgerEvent {
   thresholdName: string | null;
   observedValueLabel: string | null;
   thresholdValueLabel: string | null;
+  declaredHeartbeatSeconds?: number | null;
+  appliedThresholdSeconds?: number | null;
+  appliedThresholdKind?: string | null;
+  thresholdSourceLabel?: string | null;
+  evidenceState?: string | null;
+  publicVerificationState?: string | null;
   lastSuccessfulObservationAt?: string | null;
   lastObservationAttemptAt?: string | null;
   consecutiveFailedCycles?: number | null;
@@ -232,6 +244,19 @@ function sanitizeAlert(raw: Record<string, unknown>): SceAlert | null {
     thresholdName: readExplanationField(raw, "thresholdName", "threshold_name"),
     observedValueLabel: readExplanationField(raw, "observedValueLabel", "observed_value_label"),
     thresholdValueLabel: readExplanationField(raw, "thresholdValueLabel", "threshold_value_label"),
+    declaredHeartbeatSeconds: normalizeInteger(
+      raw.declaredHeartbeatSeconds ?? raw.declared_heartbeat_seconds,
+    ),
+    appliedThresholdSeconds: normalizeInteger(
+      raw.appliedThresholdSeconds ?? raw.applied_threshold_seconds,
+    ),
+    appliedThresholdKind: firstString(raw.appliedThresholdKind, raw.applied_threshold_kind),
+    thresholdSourceLabel: firstString(raw.thresholdSourceLabel, raw.threshold_source_label),
+    evidenceState: firstString(raw.evidenceState, raw.evidence_state),
+    publicVerificationState: firstString(
+      raw.publicVerificationState,
+      raw.public_verification_state,
+    ),
     lastSuccessfulObservationAt: normalizeDateString(
       firstString(raw.lastSuccessfulObservationAt, raw.last_successful_observation_at),
     ),
@@ -343,6 +368,19 @@ function sanitizeLedgerEvent(raw: Record<string, unknown>): SceAlertLedgerEvent 
     thresholdName: explanationField("thresholdName", "threshold_name"),
     observedValueLabel: explanationField("observedValueLabel", "observed_value_label"),
     thresholdValueLabel: explanationField("thresholdValueLabel", "threshold_value_label"),
+    declaredHeartbeatSeconds: normalizeInteger(
+      raw.declaredHeartbeatSeconds ?? raw.declared_heartbeat_seconds,
+    ),
+    appliedThresholdSeconds: normalizeInteger(
+      raw.appliedThresholdSeconds ?? raw.applied_threshold_seconds,
+    ),
+    appliedThresholdKind: firstString(raw.appliedThresholdKind, raw.applied_threshold_kind),
+    thresholdSourceLabel: firstString(raw.thresholdSourceLabel, raw.threshold_source_label),
+    evidenceState: firstString(raw.evidenceState, raw.evidence_state),
+    publicVerificationState: firstString(
+      raw.publicVerificationState,
+      raw.public_verification_state,
+    ),
     lastSuccessfulObservationAt: normalizeDateString(
       firstString(raw.lastSuccessfulObservationAt, raw.last_successful_observation_at),
     ),

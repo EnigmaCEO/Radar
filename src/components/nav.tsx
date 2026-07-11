@@ -77,7 +77,7 @@ export function Nav() {
                 className="bg-violet-600 hover:bg-violet-700 text-white"
                 asChild
               >
-                <a href="/auth/login?screen_hint=signup">Get started free</a>
+                <a href="/auth/login?screen_hint=signup">Start monitoring</a>
               </Button>
             </>
           )}

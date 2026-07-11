@@ -29,9 +29,9 @@ export default function RequestAccessPage() {
     e.preventDefault();
     setError(null);
     try {
-      const subject = `Radar Managed Plan - ${form.organization}`;
+      const subject = `Radar Desk Plan - ${form.organization}`;
       const body = [
-        "Radar Managed plan enquiry",
+        "Radar Desk plan enquiry",
         "",
         `Name: ${form.name}`,
         `Email: ${form.email}`,
@@ -67,9 +67,9 @@ export default function RequestAccessPage() {
 
       <Card className="w-full max-w-md border-white/10 bg-white/5 text-white backdrop-blur">
         <CardHeader>
-          <CardTitle className="text-white">Talk to us about Managed</CardTitle>
+          <CardTitle className="text-white">Talk to us about Desk</CardTitle>
           <CardDescription className="text-slate-400">
-            The Managed plan is custom-priced for funds, multi-protocol teams, and ops teams with complex requirements. Tell us about your setup and we&apos;ll open a prefilled email draft.
+            The Desk plan is custom-priced for funds, multi-protocol teams, and ops teams with complex requirements. Tell us about your setup and we&apos;ll open a prefilled email draft.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -151,7 +151,7 @@ export default function RequestAccessPage() {
             </Button>
 
             <p className="text-center text-xs text-slate-500">
-              Looking for Free, Live, or Pro?{" "}
+              Looking for Watch, Intel, or Radar?{" "}
               <a href="/auth/login" className="text-purple-400 underline underline-offset-4 hover:text-purple-300">
                 Sign up directly
               </a>

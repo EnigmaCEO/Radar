@@ -6,8 +6,12 @@ vi.mock("@/lib/sce-alerts", () => ({
   SceAlertsError: class SceAlertsError extends Error {},
   fetchSceAlerts: vi.fn(),
 }));
+vi.mock("@/lib/radar-api-backend", () => ({
+  bootstrapRadarAccount: vi.fn(),
+}));
 
 import { auth0 } from "@/lib/auth0";
+import { bootstrapRadarAccount } from "@/lib/radar-api-backend";
 import { fetchSceAlerts } from "@/lib/sce-alerts";
 import { GET } from "./route";
 
@@ -26,6 +30,7 @@ describe("alerts route", () => {
 
   it("preserves lifecycle and object fields from the SCE payload", async () => {
     vi.mocked(auth0.getSession).mockResolvedValue({ user: { sub: "auth0|1" } } as never);
+    vi.mocked(bootstrapRadarAccount).mockResolvedValue({ plan: "radar_signal" } as never);
     vi.mocked(fetchSceAlerts).mockResolvedValue([
       {
         id: "alert-1",
@@ -59,6 +64,12 @@ describe("alerts route", () => {
         thresholdName: "warning threshold",
         observedValueLabel: "Observed imbalance: 41.0%",
         thresholdValueLabel: "Threshold: 25.0%",
+        declaredHeartbeatSeconds: 1800,
+        appliedThresholdSeconds: 2250,
+        appliedThresholdKind: "warning_after_seconds",
+        thresholdSourceLabel: "chainlink docs",
+        evidenceState: "complete_observed_evidence",
+        publicVerificationState: "verified_public_alert",
       },
     ] as never);
 
@@ -87,7 +98,25 @@ describe("alerts route", () => {
         resolvedAt: "2026-07-10T09:00:00.000Z",
         observedValueLabel: "Observed imbalance: 41.0%",
         thresholdValueLabel: "Threshold: 25.0%",
+        declaredHeartbeatSeconds: 1800,
+        appliedThresholdSeconds: 2250,
+        appliedThresholdKind: "warning_after_seconds",
+        thresholdSourceLabel: "chainlink docs",
+        evidenceState: "complete_observed_evidence",
+        publicVerificationState: "verified_public_alert",
       }),
     ]);
+  });
+
+  it("rejects private alert history for Public Record accounts", async () => {
+    vi.mocked(auth0.getSession).mockResolvedValue({ user: { sub: "auth0|1" } } as never);
+    vi.mocked(bootstrapRadarAccount).mockResolvedValue({ plan: "free" } as never);
+
+    const response = await GET(new NextRequest("http://localhost/api/alerts"));
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: "Private alert history requires a Watch, Signal, or Desk plan.",
+    });
   });
 });

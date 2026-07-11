@@ -73,3 +73,46 @@
 - `apps/radar-api` is now self-contained: it carries its own Prisma schema, Prisma config, service layer, delivery helpers, and SCE/Auth0 integrations without importing from the public app.
 - The Next.js `src/app/api/...` handlers are temporary same-origin adapters that always forward to `RADAR_API_BASE_URL`; they no longer execute privileged fallbacks locally.
 - This repo can now be split into separate public/private repositories by moving `apps/radar-api` into a private service repo while leaving the public Next.js app as a thin frontend plus adapter layer.
+
+## Product Model Update
+
+- Public Record is now positioned as the public proof layer, not a free SaaS account tier.
+- Effective plan semantics are:
+  - `watch`: private object monitoring, up to 5 unique watched objects
+  - `radar`: private exposure monitoring, up to 25 unique watched objects with correlation and webhook delivery
+  - `radar_intel`: aggregate infrastructure history and reports, no private watchlists or private alert destinations
+  - `desk`: contracted institutional layer with raw history, signed receipts, API access, custom monitors, and review
+- Legacy stored plan identifiers remain compatibility aliases:
+  - `free` -> Public Record semantics
+  - `radar_live` -> `watch`
+  - `radar_pro` -> `radar`
+  - `managed` -> `desk`
+
+## Server-side Enforcement
+
+- Plan restrictions are now enforced server-side in `apps/radar-api`; the client only reflects availability.
+- Watchlists are no longer metered by count. Radar now meters unique covered objects across enabled private watchlists.
+- Broad watchlists without explicit object IDs resolve against the sanitized SCE catalog on the server before acceptance.
+- Watch rejects broad match-all watchlists and rejects any change that would push enabled private coverage beyond 5 unique objects.
+- Radar rejects any change that would push enabled private coverage beyond 25 unique objects.
+- Radar Intel rejects private watchlists and private alert destinations.
+- Destination access is now enforced by channel and delivery mode instead of destination count:
+  - Watch: Telegram and Discord only
+  - Radar: Telegram, Discord, and webhook
+  - Desk/internal: all currently supported channels and delivery modes
+- Manual delivery is now restricted to Radar and Desk/internal plans.
+- Private alert history queries now enforce plan-aware windows in the web app:
+  - Watch: 30 days
+  - Radar: 90 days
+  - Desk/internal: unrestricted by app policy
+
+## Public Surface Update
+
+- The landing and pricing pages now present:
+  - Public Record
+  - Watch
+  - Radar
+  - Radar Intel
+  - Desk
+- Public alert detail pages now use a public-safe projection layer and render a CTA to monitor the object with Radar.
+- A public `/alerts` page now acts as the public alert feed entry point for Public Record.

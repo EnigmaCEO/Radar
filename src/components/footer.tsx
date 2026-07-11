@@ -38,7 +38,7 @@ export function Footer() {
               </li>
               <li>
                 <Link href="/request-access" className="hover:text-foreground transition-colors">
-                  Managed plan
+                  Desk plan
                 </Link>
               </li>
             </ul>

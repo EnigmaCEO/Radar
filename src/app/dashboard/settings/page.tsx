@@ -5,23 +5,18 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle, CreditCard, Loader2, Shield, ShieldCheck } from "lucide-react";
 import { useAccount } from "@/lib/account-context";
+import { getPlanLabel, resolvePlan } from "@/lib/plan-limits";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-const PLAN_ORDER = ["free", "radar_live", "radar_pro", "managed"] as const;
+const PLAN_ORDER = ["public_record", "watch", "radar_intel", "radar_signal", "desk"] as const;
 type Plan = (typeof PLAN_ORDER)[number];
 
-const PLAN_LABEL: Record<Plan, string> = {
-  free: "Free",
-  radar_live: "Radar Live",
-  radar_pro: "Radar Pro",
-  managed: "Managed",
-};
-
 const NEXT_PLAN: Partial<Record<Plan, Plan>> = {
-  free: "radar_live",
-  radar_live: "radar_pro",
-  radar_pro: "managed",
+  public_record: "watch",
+  watch: "radar_signal",
+  radar_signal: "desk",
+  radar_intel: "desk",
 };
 
 const STATUS_CLASS: Record<string, string> = {
@@ -37,7 +32,7 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const plan = account.plan as Plan;
+  const plan = resolvePlan(account.plan) as Plan;
   const nextPlan = NEXT_PLAN[plan];
 
   const checkoutStatus = searchParams.get("checkout");
@@ -52,7 +47,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (checkoutStatus === "success") {
-      router.refresh(); // re-runs server components, re-fetches account from DB
+      router.refresh();
       const t = setTimeout(() => router.replace("/dashboard/settings"), 4000);
       return () => clearTimeout(t);
     }
@@ -67,12 +62,14 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!requestedUpgrade || checkoutStatus === "success") return;
-    if (requestedUpgrade !== "radar_live" && requestedUpgrade !== "radar_pro") return;
+    if (requestedUpgrade !== "watch" && requestedUpgrade !== "radar_signal" && requestedUpgrade !== "radar_intel") {
+      return;
+    }
     if (requestedUpgrade === plan) return;
     if (autoUpgradeAttempted === requestedUpgrade) return;
 
     setAutoUpgradeAttempted(requestedUpgrade);
-    void startUpgrade(requestedUpgrade);
+    void startUpgrade(requestedUpgrade as Plan);
   }, [autoUpgradeAttempted, checkoutStatus, plan, requestedUpgrade]);
 
   async function toggleMfa() {
@@ -113,7 +110,6 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        console.error("Upgrade error:", data.error);
         throw new Error(typeof data.error === "string" ? data.error : "Upgrade failed");
       }
       window.location.href = data.url;
@@ -128,10 +124,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage your account and subscription.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Manage your account and subscription.</p>
       </div>
 
       {checkoutStatus === "success" && (
@@ -141,7 +137,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Profile */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Profile</CardTitle>
@@ -150,19 +145,18 @@ export default function SettingsPage() {
         <CardContent className="space-y-3 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Name</span>
-            <span className="font-medium">{account.name || "—"}</span>
+            <span className="font-medium">{account.name || "-"}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Email</span>
-            <span className="font-medium">{userEmail || "—"}</span>
+            <span className="font-medium">{userEmail || "-"}</span>
           </div>
         </CardContent>
       </Card>
 
-      {/* Security */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
             {mfaEnabled ? (
               <ShieldCheck className="h-4 w-4 text-green-500" />
             ) : (
@@ -176,7 +170,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium">Two-factor authentication</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 {mfaEnabled
                   ? "MFA is active. You'll be prompted on each login."
                   : "Add an extra layer of security to your account."}
@@ -185,23 +179,20 @@ export default function SettingsPage() {
             <Button
               size="sm"
               variant={mfaEnabled ? "outline" : "default"}
-              className={mfaEnabled ? "" : "bg-violet-600 hover:bg-violet-700 text-white"}
+              className={mfaEnabled ? "" : "bg-violet-600 text-white hover:bg-violet-700"}
               onClick={toggleMfa}
               disabled={mfaLoading || mfaEnabled === null}
             >
-              {mfaLoading ? "Updating…" : mfaEnabled ? "Disable" : "Enable"}
+              {mfaLoading ? "Updating..." : mfaEnabled ? "Disable" : "Enable"}
             </Button>
           </div>
-          {mfaMessage && (
-            <p className="text-xs text-muted-foreground">{mfaMessage}</p>
-          )}
+          {mfaMessage && <p className="text-xs text-muted-foreground">{mfaMessage}</p>}
         </CardContent>
       </Card>
 
-      {/* Billing */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
             <CreditCard className="h-4 w-4" />
             Billing
           </CardTitle>
@@ -210,7 +201,7 @@ export default function SettingsPage() {
         <CardContent className="space-y-4 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Current plan</span>
-            <span className="font-semibold">{PLAN_LABEL[plan] ?? plan}</span>
+            <span className="font-semibold">{getPlanLabel(account.plan)}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Status</span>
@@ -221,29 +212,39 @@ export default function SettingsPage() {
             </span>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row pt-2">
-            {nextPlan && (
-              nextPlan === "managed" ? (
-                <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white" asChild>
-                  <a href="mailto:radar@sagitta.systems?subject=Radar Managed Plan">
+          <div className="flex flex-col gap-2 pt-2 sm:flex-row">
+            {nextPlan &&
+              (nextPlan === "desk" ? (
+                <Button size="sm" className="bg-violet-600 text-white hover:bg-violet-700" asChild>
+                  <a href="mailto:radar@sagitta.systems?subject=Radar Desk Plan">
                     Talk to us <ArrowRight className="ml-1 h-3 w-3" />
                   </a>
                 </Button>
               ) : (
                 <Button
                   size="sm"
-                  className="bg-violet-600 hover:bg-violet-700 text-white"
+                  className="bg-violet-600 text-white hover:bg-violet-700"
                   disabled={upgrading}
                   onClick={() => startUpgrade(nextPlan)}
                 >
                   {upgrading ? (
-                    <><Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> Upgrading…</>
+                    <>
+                      <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> Upgrading...
+                    </>
                   ) : (
-                    <>Upgrade to {PLAN_LABEL[nextPlan]} <ArrowRight className="ml-1 h-3 w-3" /></>
+                    <>
+                      Upgrade to {getPlanLabel(nextPlan)} <ArrowRight className="ml-1 h-3 w-3" />
+                    </>
                   )}
                 </Button>
-              )
+              ))}
+
+            {plan !== "radar_intel" && plan !== "desk" && (
+              <Button size="sm" variant="outline" disabled={upgrading} onClick={() => startUpgrade("radar_intel")}>
+                Add Intel
+              </Button>
             )}
+
             {account.stripeCustomerId && (
               <Button size="sm" variant="outline" asChild>
                 <Link href="/api/stripe/portal">Manage billing</Link>
@@ -251,9 +252,7 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {upgradeError && (
-            <p className="text-xs text-red-500">{upgradeError}</p>
-          )}
+          {upgradeError && <p className="text-xs text-red-500">{upgradeError}</p>}
 
           <p className="text-xs text-muted-foreground">
             Powered by Stripe. Your payment information is never stored on our servers.

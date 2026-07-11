@@ -6,141 +6,165 @@ import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PricingCta, type CheckoutPlan } from "@/components/pricing-cta";
+import { auth0 } from "@/lib/auth0";
 
-function buildSignupHref(plan?: "radar_live" | "radar_pro") {
-  if (!plan) return "/auth/login?screen_hint=signup";
-  const params = new URLSearchParams({
-    screen_hint: "signup",
-    returnTo: `/dashboard/settings?upgrade=${plan}`,
-  });
-  return `/login?${params.toString()}`;
-}
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: "Simple, transparent pricing for DeFi infrastructure monitoring.",
+  description: "Pricing for Radar infrastructure-state monitoring.",
 };
 
 const plans = [
   {
-    name: "Free",
-    slug: "free",
-    priceLabel: "$0",
-    description: "Get a feel for Radar with the public daily brief and alert feed.",
+    name: "Watch",
+    slug: "watch",
+    priceLabel: "$29/mo",
+    description: "Personal monitoring for selected infrastructure objects.",
     features: [
-      { text: "Daily signal briefings", included: true },
-      { text: "Public alert feed (read-only)", included: true },
-      { text: "1-day alert history", included: true },
-      { text: "Watchlists", included: false },
-      { text: "Live alert delivery", included: false },
-      { text: "Discord / Telegram / Webhook", included: false },
+      { text: "Up to 5 watchlist objects", included: true },
+      { text: "Telegram & Discord alerts", included: true },
+      { text: "7-day event history", included: true },
     ],
     highlight: false,
-    cta: "Start free",
-    ctaHref: buildSignupHref(),
+    cta: "Start Watch",
   },
   {
-    name: "Radar Live",
-    slug: "radar_live",
-    priceLabel: "$49/mo",
-    description: "Real-time delivery for teams that need to act fast on infrastructure changes.",
+    name: "Intel",
+    slug: "radar_intel",
+    priceLabel: "$99/mo",
+    description: "Aggregate Radar intelligence without private monitoring.",
     features: [
-      { text: "Everything in Free", included: true },
-      { text: "Up to 3 custom watchlists", included: true },
-      { text: "Discord & Telegram delivery", included: true },
-      { text: "2 delivery destinations", included: true },
-      { text: "7-day alert history", included: true },
-      { text: "Webhook delivery", included: false },
+      { text: "Provider reliability scores", included: true },
+      { text: "Infrastructure health trends", included: true },
+      { text: "Weekly & monthly reports", included: true },
+      { text: "Deep aggregate history", included: true },
+      { text: "Aggregate CSV exports", included: true },
+    ],
+    highlight: false,
+    cta: "Start Intel",
+  },
+  {
+    name: "Signal",
+    slug: "radar_signal",
+    priceLabel: "$149/mo",
+    description: "Private exposure monitoring with correlation and delivery.",
+    features: [
+      { text: "Up to 25 watchlist objects", included: true },
+      {
+        text: "Correlation & exposure groups",
+        included: true,
+        detail: "Know when related parts of your position break together.",
+      },
+      { text: "Telegram, Discord & webhook alerts", included: true },
+      { text: "90-day event history", included: true },
     ],
     highlight: true,
-    cta: "Get started",
-    ctaHref: buildSignupHref("radar_live"),
+    cta: "Start Signal",
+    badge: "Core product",
   },
   {
-    name: "Radar Pro",
-    slug: "radar_pro",
-    priceLabel: "$199/mo",
-    description: "For protocols and teams managing multiple dependencies across chains.",
+    name: "Desk",
+    slug: "desk",
+    priceLabel: "From $2,500/mo",
+    description: "Institutional state data, review, and integration.",
     features: [
-      { text: "Everything in Radar Live", included: true },
-      { text: "Up to 10 custom watchlists", included: true },
-      { text: "Discord, Telegram & Webhook", included: true },
-      { text: "10 delivery destinations", included: true },
-      { text: "30-day alert history", included: true },
-      { text: "Priority support", included: false },
+      { text: "Full raw event history", included: true },
+      { text: "API access", included: true },
+      { text: "Custom monitoring", included: true },
+      { text: "Support SLA", included: true },
+      { text: "Alert exporting", included: true },
+      { text: "Custom reporting", included: true },
     ],
     highlight: false,
-    cta: "Get started",
-    ctaHref: buildSignupHref("radar_pro"),
-  },
-  {
-    name: "Managed",
-    slug: "managed",
-    priceLabel: "Custom pricing",
-    description: "Full-service for DeFi protocols, funds, and security teams.",
-    features: [
-      { text: "Everything in Pro", included: true },
-      { text: "Unlimited watchlists", included: true },
-      { text: "Unlimited delivery destinations", included: true },
-      { text: "365-day alert history", included: true },
-      { text: "Dedicated support & onboarding", included: true },
-      { text: "Custom coverage configuration", included: true },
-    ],
-    highlight: false,
-    cta: "Talk to us",
+    cta: "Talk to Sagitta Labs",
     ctaHref: "/request-access",
   },
 ];
 
 const comparison = [
   {
-    feature: "Daily signal briefings",
-    free: true,
-    radar_live: true,
-    radar_pro: true,
-    managed: true,
+    feature: "Watchlist objects",
+    watch: "5",
+    radar_intel: "None",
+    radar: "25",
+    desk: "Contracted",
   },
   {
-    feature: "Watchlists",
-    free: "None",
-    radar_live: "3",
-    radar_pro: "10",
-    managed: "Unlimited",
+    feature: "Correlation",
+    watch: "No",
+    radar_intel: "Aggregate only",
+    radar: "Yes",
+    desk: "Yes",
   },
   {
-    feature: "Discord delivery",
-    free: false,
-    radar_live: true,
-    radar_pro: true,
-    managed: true,
+    feature: "Event history",
+    watch: "7 days",
+    radar_intel: "No",
+    radar: "90 days",
+    desk: "Contracted raw history",
   },
   {
-    feature: "Telegram delivery",
-    free: false,
-    radar_live: true,
-    radar_pro: true,
-    managed: true,
+    feature: "Delivery cadence",
+    watch: "Daily digest",
+    radar_intel: "None",
+    radar: "Per-cycle",
+    desk: "Per-cycle",
   },
   {
-    feature: "Webhook delivery",
-    free: false,
-    radar_live: false,
-    radar_pro: true,
-    managed: true,
+    feature: "Aggregate history",
+    watch: "Basic",
+    radar_intel: "Deep",
+    radar: "Basic",
+    desk: "Deep + raw",
   },
   {
-    feature: "Delivery destinations",
-    free: "None",
-    radar_live: "2",
-    radar_pro: "10",
-    managed: "Unlimited",
+    feature: "Reports",
+    watch: "No",
+    radar_intel: "Weekly & monthly",
+    radar: "Operational briefings",
+    desk: "Custom",
   },
   {
-    feature: "Alert history",
-    free: "1 day",
-    radar_live: "7 days",
-    radar_pro: "30 days",
-    managed: "365 days",
+    feature: "Webhook / API",
+    watch: "No",
+    radar_intel: "Aggregate export only",
+    radar: "Webhook",
+    desk: "Webhook + API",
+  },
+  {
+    feature: "Signed receipts",
+    watch: "No",
+    radar_intel: "No",
+    radar: "No",
+    desk: "Yes",
+  },
+  {
+    feature: "Custom monitors",
+    watch: "No",
+    radar_intel: "No",
+    radar: "No",
+    desk: "Yes",
+  },
+];
+
+// Positioning framing surfaced below the plan cards.
+const distinctions = [
+  {
+    name: "Intel",
+    analogy: "Climate report",
+    description: "Aggregated, interpreted, published statistics.",
+  },
+  {
+    name: "Signal",
+    analogy: "Your weather alerts",
+    description: "Private monitored exposure and correlated conditions.",
+  },
+  {
+    name: "Desk",
+    analogy: "Raw station data + analyst review",
+    description: "Query the underlying state, export receipts, integrate with systems.",
   },
 ];
 
@@ -149,13 +173,16 @@ function Cell({ value }: { value: boolean | string }) {
     return value ? (
       <Check className="mx-auto h-4 w-4 text-primary" />
     ) : (
-      <span className="text-muted-foreground">—</span>
+      <span className="text-muted-foreground">-</span>
     );
   }
   return <span className="text-sm">{value}</span>;
 }
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const session = await auth0.getSession();
+  const isAuthenticated = Boolean(session);
+
   return (
     <div className="flex min-h-screen flex-col">
       <Nav />
@@ -164,92 +191,113 @@ export default function PricingPage() {
         <div className="container mx-auto max-w-screen-xl px-4">
           <div className="mb-16 text-center">
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-              Simple, transparent pricing
+              Private monitoring, aggregate intelligence, institutional workflows
             </h1>
             <p className="mt-4 text-lg text-muted-foreground">
-              Start free. Upgrade when you need real-time delivery and custom watchlists.
+              Choose how Radar serves you: monitor objects, study infrastructure trends, correlate private exposure, or integrate verified state data into your systems.
             </p>
           </div>
 
-          {/* Plan cards */}
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-20">
+          <div className="mb-20 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
             {plans.map((plan) => (
               <Card
                 key={plan.slug}
                 className={plan.highlight ? "border-primary shadow-lg" : "border-border/60"}
               >
                 <CardHeader>
-                  {plan.highlight && (
+                  {plan.badge && (
                     <Badge variant="default" className="mb-2 w-fit text-xs">
-                      Most popular
+                      {plan.badge}
                     </Badge>
                   )}
                   <CardTitle className="text-base">{plan.name}</CardTitle>
                   <div className="text-2xl font-bold">{plan.priceLabel}</div>
-                  <CardDescription className="text-xs">{plan.description}</CardDescription>
+                  <CardDescription className="text-xs leading-5">{plan.description}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                   <ul className="space-y-2">
-                    {plan.features.map((f) => (
-                      <li key={f.text} className="flex items-start gap-2 text-sm">
-                        {f.included ? (
+                    {plan.features.map((feature) => (
+                      <li key={feature.text} className="flex items-start gap-2 text-sm">
+                        {feature.included ? (
                           <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                         ) : (
-                          <span className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground text-center">
-                            —
-                          </span>
+                          <span className="mt-0.5 h-4 w-4 shrink-0 text-center text-muted-foreground">-</span>
                         )}
-                        <span className={f.included ? "" : "text-muted-foreground"}>
-                          {f.text}
+                        <span className={feature.included ? "" : "text-muted-foreground"}>
+                          {feature.text}
+                          {"detail" in feature && feature.detail ? (
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              {feature.detail}
+                            </span>
+                          ) : null}
                         </span>
                       </li>
                     ))}
                   </ul>
-                  <Button
-                    variant={plan.highlight ? "default" : "outline"}
-                    size="sm"
-                    className="w-full mt-2"
-                    asChild
-                  >
-                    <Link href={plan.ctaHref}>{plan.cta}</Link>
-                  </Button>
+                  {plan.slug === "desk" ? (
+                    <Button
+                      variant={plan.highlight ? "default" : "outline"}
+                      size="sm"
+                      className="mt-2 w-full"
+                      asChild
+                    >
+                      <Link href="/request-access">{plan.cta}</Link>
+                    </Button>
+                  ) : (
+                    <PricingCta
+                      plan={plan.slug as CheckoutPlan}
+                      label={plan.cta}
+                      highlight={plan.highlight}
+                      isAuthenticated={isAuthenticated}
+                    />
+                  )}
                 </CardContent>
               </Card>
             ))}
           </div>
 
-          {/* Comparison table */}
+          <div className="mb-20">
+            <div className="mb-6 text-center">
+              <h2 className="text-2xl font-bold tracking-tight">How the products differ</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Intel, Signal, and Desk answer different questions about the same infrastructure.
+              </p>
+            </div>
+            <div className="grid gap-6 md:grid-cols-3">
+              {distinctions.map((item) => (
+                <Card key={item.name} className="border-border/60">
+                  <CardHeader>
+                    <Badge variant="secondary" className="mb-2 w-fit text-xs">
+                      {item.name}
+                    </Badge>
+                    <CardTitle className="text-lg">{item.analogy}</CardTitle>
+                    <CardDescription className="text-sm leading-6">{item.description}</CardDescription>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          </div>
+
           <div className="overflow-x-auto rounded-xl border border-border/60">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[760px] text-sm">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/30">
-                  <th className="px-4 py-3 text-left font-medium">Feature</th>
-                  {["Free", "Radar Live", "Radar Pro", "Managed"].map((p) => (
-                    <th key={p} className="px-4 py-3 text-center font-medium">
-                      {p}
+                  <th className="px-4 py-3 text-left font-medium">Capability</th>
+                  {["Watch", "Intel", "Signal", "Desk"].map((label) => (
+                    <th key={label} className="px-4 py-3 text-center font-medium">
+                      {label}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {comparison.map((row, i) => (
-                  <tr
-                    key={row.feature}
-                    className={i % 2 === 0 ? "bg-background" : "bg-muted/20"}
-                  >
+                {comparison.map((row, index) => (
+                  <tr key={row.feature} className={index % 2 === 0 ? "bg-background" : "bg-muted/20"}>
                     <td className="px-4 py-3 text-muted-foreground">{row.feature}</td>
-                    <td className="px-4 py-3 text-center">
-                      <Cell value={row.free} />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Cell value={row.radar_live} />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Cell value={row.radar_pro} />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Cell value={row.managed} />
-                    </td>
+                    <td className="px-4 py-3 text-center"><Cell value={row.watch} /></td>
+                    <td className="px-4 py-3 text-center"><Cell value={row.radar_intel} /></td>
+                    <td className="px-4 py-3 text-center"><Cell value={row.radar} /></td>
+                    <td className="px-4 py-3 text-center"><Cell value={row.desk} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -257,7 +305,7 @@ export default function PricingPage() {
           </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            All paid plans are provisioned via Stripe. Need a custom contract or invoice?{" "}
+            Self-serve billing is Stripe-backed where configured. Desk is handled by contract. Need a custom contract or invoice?{" "}
             <Link href="/request-access" className="underline underline-offset-4">
               Contact us.
             </Link>
