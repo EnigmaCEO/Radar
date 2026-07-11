@@ -1,4 +1,5 @@
 import type { SessionData } from "@auth0/nextjs-auth0/types";
+import type { RadarAccount } from "@/lib/radar-account";
 
 function getRadarApiBaseUrl(): string | null {
   const value = process.env.RADAR_API_BASE_URL;
@@ -31,11 +32,35 @@ function buildActorHeaders(session: SessionData): HeadersInit {
   };
 }
 
+function authLogContext(session: SessionData) {
+  const user = getUser(session);
+  return {
+    auth0Sub: user.sub,
+    hasEmail: Boolean(user.email),
+    hasName: Boolean(user.name),
+  };
+}
+
+function summarizeAccount(account: Partial<RadarAccount>) {
+  return {
+    id: account.id ?? null,
+    plan: account.plan ?? null,
+    status: account.status ?? null,
+    hasStripeCustomerId: Boolean(account.stripeCustomerId),
+    hasStripeSubId: Boolean(account.stripeSubId),
+  };
+}
+
 export async function bootstrapRadarAccount(session: SessionData) {
   const baseUrl = getRadarApiBaseUrl();
   if (!baseUrl) {
     throw new Error("RADAR_API_BASE_URL is not configured.");
   }
+
+  console.info("[radar-auth] bootstrap account request", {
+    ...authLogContext(session),
+    baseUrl,
+  });
 
   const response = await fetch(`${baseUrl}/v1/accounts/bootstrap`, {
     method: "POST",
@@ -48,10 +73,22 @@ export async function bootstrapRadarAccount(session: SessionData) {
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
+    console.error("[radar-auth] bootstrap account failed", {
+      ...authLogContext(session),
+      baseUrl,
+      status: response.status,
+      detail: detail.slice(0, 500),
+    });
     throw new Error(`Radar API bootstrap failed (${response.status})${detail ? `: ${detail}` : ""}`);
   }
 
-  return response.json();
+  const account = (await response.json()) as RadarAccount;
+  console.info("[radar-auth] bootstrap account success", {
+    ...authLogContext(session),
+    baseUrl,
+    account: summarizeAccount(account),
+  });
+  return account;
 }
 
 export async function forwardRadarApiRequest(

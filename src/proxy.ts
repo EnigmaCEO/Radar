@@ -9,6 +9,9 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith("/dashboard")) {
     const session = await auth0.getSession(request);
     if (!session) {
+      console.warn("[radar-auth] proxy redirect: missing dashboard session", {
+        pathname,
+      });
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("returnTo", pathname);
       return NextResponse.redirect(loginUrl);
