@@ -22,6 +22,9 @@ export function PricingCta({ plan, label, highlight, isAuthenticated }: PricingC
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const highlightClasses = highlight
+    ? "bg-primary text-primary-foreground hover:bg-primary/90"
+    : undefined;
 
   const startCheckout = useCallback(async () => {
     setLoading(true);
@@ -54,7 +57,12 @@ export function PricingCta({ plan, label, highlight, isAuthenticated }: PricingC
     const returnTo = `/pricing?plan=${plan}`;
     const href = `/auth/login?screen_hint=signup&returnTo=${encodeURIComponent(returnTo)}`;
     return (
-      <Button variant={highlight ? "default" : "outline"} size="sm" className="mt-2 w-full" asChild>
+      <Button
+        variant={highlight ? "default" : "outline"}
+        size="sm"
+        className={`mt-2 w-full${highlightClasses ? ` ${highlightClasses}` : ""}`}
+        asChild
+      >
         <Link href={href}>{label}</Link>
       </Button>
     );
@@ -65,7 +73,7 @@ export function PricingCta({ plan, label, highlight, isAuthenticated }: PricingC
       <Button
         variant={highlight ? "default" : "outline"}
         size="sm"
-        className="w-full"
+        className={`w-full${highlightClasses ? ` ${highlightClasses}` : ""}`}
         disabled={loading}
         onClick={startCheckout}
       >

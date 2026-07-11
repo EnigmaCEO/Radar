@@ -206,7 +206,10 @@ export default async function PricingPage() {
               >
                 <CardHeader>
                   {plan.badge && (
-                    <Badge variant="default" className="mb-2 w-fit text-xs">
+                    <Badge
+                      variant="default"
+                      className="mb-2 w-fit bg-primary text-primary-foreground text-xs hover:bg-primary/90"
+                    >
                       {plan.badge}
                     </Badge>
                   )}
