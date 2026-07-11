@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowRight, Loader2 } from "lucide-react";
 
 export type CheckoutPlan = "watch" | "radar_signal" | "radar_intel";
 
@@ -22,9 +21,9 @@ export function PricingCta({ plan, label, highlight, isAuthenticated }: PricingC
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const highlightClasses = highlight
-    ? "bg-primary text-primary-foreground hover:bg-primary/90"
-    : undefined;
+  const ctaClassName = highlight
+    ? "group inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    : "group inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
   const startCheckout = useCallback(async () => {
     setLoading(true);
@@ -57,23 +56,18 @@ export function PricingCta({ plan, label, highlight, isAuthenticated }: PricingC
     const returnTo = `/pricing?plan=${plan}`;
     const href = `/auth/login?screen_hint=signup&returnTo=${encodeURIComponent(returnTo)}`;
     return (
-      <Button
-        variant={highlight ? "default" : "outline"}
-        size="sm"
-        className={`mt-2 w-full${highlightClasses ? ` ${highlightClasses}` : ""}`}
-        asChild
-      >
-        <Link href={href}>{label}</Link>
-      </Button>
+      <Link href={href} className={ctaClassName}>
+        {label}
+        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+      </Link>
     );
   }
 
   return (
     <div className="mt-2 flex flex-col gap-1">
-      <Button
-        variant={highlight ? "default" : "outline"}
-        size="sm"
-        className={`w-full${highlightClasses ? ` ${highlightClasses}` : ""}`}
+      <button
+        type="button"
+        className={ctaClassName}
         disabled={loading}
         onClick={startCheckout}
       >
@@ -82,9 +76,12 @@ export function PricingCta({ plan, label, highlight, isAuthenticated }: PricingC
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Redirecting...
           </>
         ) : (
-          label
+          <>
+            {label}
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          </>
         )}
-      </Button>
+      </button>
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   );

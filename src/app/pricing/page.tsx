@@ -4,7 +4,6 @@ import { Check } from "lucide-react";
 import { Nav } from "@/components/nav";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PricingCta, type CheckoutPlan } from "@/components/pricing-cta";
 import { auth0 } from "@/lib/auth0";
@@ -206,12 +205,9 @@ export default async function PricingPage() {
               >
                 <CardHeader>
                   {plan.badge && (
-                    <Badge
-                      variant="default"
-                      className="mb-2 w-fit bg-primary text-primary-foreground text-xs hover:bg-primary/90"
-                    >
+                    <span className="inline-flex items-center rounded-full bg-violet-600 px-2.5 py-0.5 text-xs font-semibold text-white">
                       {plan.badge}
-                    </Badge>
+                    </span>
                   )}
                   <CardTitle className="text-base">{plan.name}</CardTitle>
                   <div className="text-2xl font-bold">{plan.priceLabel}</div>
