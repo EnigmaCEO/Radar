@@ -92,15 +92,40 @@ export function resolvePlan(plan: string): ResolvedRadarPlan {
 // Statuses that count as a live, paid subscription. `trial` is intentionally
 // excluded: dashboard access requires a paid, active plan.
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "past_due"]);
+const INACTIVE_SUBSCRIPTION_STATUSES = new Set([
+  "canceled",
+  "cancelled",
+  "suspended",
+  "unpaid",
+  "incomplete",
+  "incomplete_expired",
+]);
+
+function normalizeSubscriptionStatus(status: string): string {
+  return status.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
 
 // True when the account holds a paid plan with a live subscription. Unpaid
 // (`public_record`/`free`) and canceled/suspended accounts return false.
 // `internal` plans (staff / unknown aliases) always pass.
-export function hasActivePlan(account: { plan: string; status: string }): boolean {
+export function hasActivePlan(account: {
+  plan: string;
+  status: string;
+  stripeSubId?: string | null;
+}): boolean {
   const resolved = resolvePlan(account.plan);
   if (resolved === "internal") return true;
   if (resolved === "public_record") return false;
-  return ACTIVE_SUBSCRIPTION_STATUSES.has(account.status);
+
+  const normalizedStatus = normalizeSubscriptionStatus(account.status);
+  if (ACTIVE_SUBSCRIPTION_STATUSES.has(normalizedStatus)) return true;
+  if (INACTIVE_SUBSCRIPTION_STATUSES.has(normalizedStatus)) return false;
+
+  // The standalone backend may temporarily return a non-normalized or stale
+  // account status even when Stripe has already attached a live subscription.
+  // For paid plans, a present Stripe subscription id is a stronger signal than
+  // an unknown intermediate status string.
+  return Boolean(account.stripeSubId);
 }
 
 export function getPlanLabel(plan: string): string {

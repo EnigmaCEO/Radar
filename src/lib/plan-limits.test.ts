@@ -5,6 +5,7 @@ import {
   getAllowedDeliveryModes,
   getAllowedDestinationChannels,
   getDestinationLimit,
+  hasActivePlan,
   getPlanLabel,
   getPrivateHistoryDays,
   getPrivateObjectLimit,
@@ -67,5 +68,23 @@ describe("plan-limits", () => {
     expect(getPrivateHistoryDays("radar_signal")).toBe(90);
     expect(getPrivateHistoryDays("radar_intel")).toBe(0);
     expect(getPrivateHistoryDays("desk")).toBeNull();
+  });
+
+  it("treats active and past-due paid subscriptions as dashboard-eligible", () => {
+    expect(hasActivePlan({ plan: "radar_signal", status: "active" })).toBe(true);
+    expect(hasActivePlan({ plan: "watch", status: "past_due" })).toBe(true);
+    expect(hasActivePlan({ plan: "radar_signal", status: "past due" })).toBe(true);
+  });
+
+  it("rejects public and explicitly inactive subscriptions", () => {
+    expect(hasActivePlan({ plan: "free", status: "active" })).toBe(false);
+    expect(hasActivePlan({ plan: "radar_signal", status: "canceled", stripeSubId: "sub_123" })).toBe(false);
+    expect(hasActivePlan({ plan: "watch", status: "suspended", stripeSubId: "sub_123" })).toBe(false);
+  });
+
+  it("allows paid plans with an attached Stripe subscription when status is unknown", () => {
+    expect(hasActivePlan({ plan: "radar_signal", status: "pending", stripeSubId: "sub_123" })).toBe(true);
+    expect(hasActivePlan({ plan: "watch", status: "current", stripeSubId: "sub_123" })).toBe(true);
+    expect(hasActivePlan({ plan: "watch", status: "pending", stripeSubId: null })).toBe(false);
   });
 });
