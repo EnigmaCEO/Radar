@@ -264,8 +264,11 @@ describe("payload builders", () => {
     );
 
     expect(previews).toHaveLength(1);
-    expect(previews[0].text).toContain("Liquidity drop: 98.7%");
-    expect(previews[0].text).toContain("Critical threshold: 50.0%");
+    // Noun + snapshot basis, family-neutral (works for concentrated and v2).
+    expect(previews[0].text).toContain(
+      "Monitored liquidity drop: 98.7% since previous observation",
+    );
+    expect(previews[0].text).toContain("Critical threshold: 50.0% drop");
     // Regression: the metric line must not fall through to the generic default.
     expect(previews[0].text).not.toContain("Observed: 98.7%");
   });

@@ -236,9 +236,9 @@ function announcementMetricLabels(alert: AnnouncementFeedAlert): {
     case "LP_LIQUIDITY_DROP":
       // Family-neutral: covers SlipStream/UniV3 (in-range L) and v2 (reserve
       // proxy) under the same reason code. SCE's whatHappened carries any
-      // pool-family precision.
+      // pool-family precision; the value carries the snapshot basis.
       return {
-        observedLabel: "Liquidity drop",
+        observedLabel: "Monitored liquidity drop",
         thresholdLabel: `${severityLabel(alert.severity)} threshold`,
       };
     case "BRIDGE_ROUTE_LATENCY":
@@ -253,6 +253,27 @@ function announcementMetricLabels(alert: AnnouncementFeedAlert): {
         thresholdLabel: `${severityLabel(alert.severity)} threshold`,
       };
   }
+}
+
+// Observed/threshold values are cleaned from SCE labels, then decorated with
+// reason-specific context that SCE omits. LP_LIQUIDITY_DROP is computed
+// snapshot-to-snapshot against a percent-drop threshold, so state both.
+function announcementObservedValue(alert: AnnouncementFeedAlert): string {
+  const base = cleanAnnouncementMetricValue(alert.observedValueLabel) ?? "not provided by SCE";
+  if (base === "not provided by SCE") return base;
+  if (alert.reasonCode.trim().toUpperCase() === "LP_LIQUIDITY_DROP") {
+    return `${base} since previous observation`;
+  }
+  return base;
+}
+
+function announcementThresholdValue(alert: AnnouncementFeedAlert): string {
+  const base = cleanAnnouncementMetricValue(alert.thresholdValueLabel) ?? "not provided by SCE";
+  if (base === "not provided by SCE") return base;
+  if (alert.reasonCode.trim().toUpperCase() === "LP_LIQUIDITY_DROP") {
+    return `${base} drop`;
+  }
+  return base;
 }
 
 function fallbackAnnouncementExplanation(alert: AnnouncementFeedAlert): string {
@@ -319,9 +340,9 @@ function buildAnnouncementText(alert: AnnouncementFeedAlert): string {
   const { hashtags, cashtags } = buildAnnouncementTags(alert);
   const { observedLabel, thresholdLabel } = announcementMetricLabels(alert);
   const observedValue =
-    cleanAnnouncementMetricValue(alert.observedValueLabel) ?? "not provided by SCE";
+    announcementObservedValue(alert);
   const thresholdValue =
-    cleanAnnouncementMetricValue(alert.thresholdValueLabel) ?? "not provided by SCE";
+    announcementThresholdValue(alert);
   const detailsUrl = buildAnnouncementDetailsUrl(alert.id);
 
   return [
@@ -353,12 +374,12 @@ function buildAnnouncementDiscordEmbed(
     fields: [
       {
         name: observedLabel,
-        value: cleanAnnouncementMetricValue(alert.observedValueLabel) ?? "not provided by SCE",
+        value: announcementObservedValue(alert),
         inline: true,
       },
       {
         name: thresholdLabel,
-        value: cleanAnnouncementMetricValue(alert.thresholdValueLabel) ?? "not provided by SCE",
+        value: announcementThresholdValue(alert),
         inline: true,
       },
       {
@@ -416,11 +437,11 @@ function buildAnnouncementWebhookPayload(
     explanation: buildAnnouncementExplanation(alert),
     observed: {
       label: observedLabel,
-      value: cleanAnnouncementMetricValue(alert.observedValueLabel) ?? "not provided by SCE",
+      value: announcementObservedValue(alert),
     },
     thresholdCrossed: {
       label: thresholdLabel,
-      value: cleanAnnouncementMetricValue(alert.thresholdValueLabel) ?? "not provided by SCE",
+      value: announcementThresholdValue(alert),
       thresholdName: alert.thresholdName ?? null,
     },
     statusText: firstString(alert.radarStatus) ?? fallbackAnnouncementStatus(alert),
