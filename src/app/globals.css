@@ -26,9 +26,12 @@
     --ring: 268 72% 52%;
     --radius: 0.5rem;
     --gold: 43 88% 50%;
-    --radar-watch: 45 93% 47%;
+    /* Radar Alert Threshold Doctrine v1.0 legend: watch blue, warning orange,
+       critical red, resolved green. */
+    --radar-watch: 217 91% 53%;
     --radar-warning: 25 95% 53%;
     --radar-critical: 0 84% 60%;
+    --radar-resolved: 142 71% 45%;
   }
 
   .dark {
@@ -53,9 +56,10 @@
     --input: 247 20% 16%;
     --ring: 268 85% 68%;
     --gold: 43 90% 58%;
-    --radar-watch: 45 93% 52%;
+    --radar-watch: 217 91% 60%;
     --radar-warning: 25 95% 58%;
     --radar-critical: 0 84% 62%;
+    --radar-resolved: 142 69% 58%;
   }
 }
 

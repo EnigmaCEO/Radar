@@ -74,7 +74,7 @@ const FINDING_CARD_CLASSES: Record<RadarSeverity, string> = {
     "border-l-4 border-l-red-500 bg-red-50/50 dark:bg-red-950/20 border-y-border/60 border-r-border/60",
   warning:
     "border-l-4 border-l-orange-500 bg-orange-50/40 dark:bg-orange-950/10 border-y-border/60 border-r-border/60",
-  watch: "border-l-4 border-l-yellow-500 border-y-border/60 border-r-border/60",
+  watch: "border-l-4 border-l-blue-500 border-y-border/60 border-r-border/60",
 };
 
 const COVERAGE_CARD_CLASSES = {
@@ -93,7 +93,7 @@ function FindingIcon({ severity }: { severity: RadarSeverity }) {
           ? "text-red-500"
           : severity === "warning"
             ? "text-orange-500"
-            : "text-yellow-500"
+            : "text-blue-500"
       }`}
     />
   );

@@ -17,6 +17,10 @@ function severityVariant(severity: string): "critical" | "warning" | "watch" {
   return "watch";
 }
 
+function statusVariant(status: string): "resolved" | "secondary" {
+  return status.toLowerCase() === "resolved" ? "resolved" : "secondary";
+}
+
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 export default async function PublicAlertsPage() {
@@ -57,7 +61,7 @@ export default async function PublicAlertsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={severityVariant(alert.severity)}>{alert.severity}</Badge>
                     <Badge variant="secondary">{alert.monitorType}</Badge>
-                    <Badge variant="secondary">{alert.status}</Badge>
+                    <Badge variant={statusVariant(alert.status)}>{alert.status}</Badge>
                   </div>
                   <CardTitle className="text-lg">{alert.summary}</CardTitle>
                 </CardHeader>

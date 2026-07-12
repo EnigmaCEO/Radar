@@ -30,6 +30,21 @@ const MONITOR_TYPE_LABEL: Record<SceThresholdMonitorType, string> = {
   lp: "LP pools",
 };
 
+// Per-monitor provenance note (Radar Alert Threshold Doctrine v1.0). Oracle
+// thresholds are derived from each feed's declared heartbeat; bridge and LP
+// thresholds are Radar-calibrated from observed distributions and are NOT
+// official protocol health thresholds.
+const MONITOR_TYPE_NOTE: Record<SceThresholdMonitorType, string> = {
+  oracle:
+    "Derived from each feed's declared heartbeat: watch = heartbeat × 1.00, warning = heartbeat × 1.25, critical = heartbeat × 2.00.",
+  oracle_reference:
+    "Basis-point deviation bands anchored to each feed's on-chain deviation threshold. Stablecoin critical bands double as de-peg signals.",
+  bridge:
+    "Radar-calibrated from observed settlement distributions (warning ≈ p95, critical ≈ p99) — not official protocol health thresholds.",
+  lp:
+    "Radar-calibrated from observed distributions (warning ≈ p95, critical ≈ p99) — not official protocol health thresholds. Imbalance means an object crossed Radar's balance-concentration watch threshold, not that the pool is unhealthy.",
+};
+
 function formatSeconds(value: number): string {
   if (value < 60) return `${value}s`;
   if (value < 3600) {
@@ -163,6 +178,28 @@ export default function ThresholdsPage() {
         </p>
       </div>
 
+      <Card className="border-border/60 bg-muted/30">
+        <CardContent className="space-y-3 px-4 py-4 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium text-foreground">How Radar sets these thresholds</p>
+            <Badge variant="outline">oracle-monitor-v1.0</Badge>
+          </div>
+          <div className="grid gap-1.5">
+            <ThresholdLegend tone="watch" label="Watch" desc="feed reached its declared heartbeat — a monitoring tripwire, not yet degraded." />
+            <ThresholdLegend tone="warning" label="Warning" desc="feed age exceeded heartbeat × 1.25 — degradation is forming." />
+            <ThresholdLegend tone="critical" label="Critical" desc="feed age exceeded heartbeat × 2.00 — materially overdue or outside the acceptable envelope." />
+            <ThresholdLegend tone="resolved" label="Resolved" desc="feed refreshed back below the active threshold." />
+          </div>
+          <p>
+            Oracle freshness thresholds are derived from each feed&apos;s declared heartbeat, so a
+            healthy feed that updates a little after its heartbeat enters Watch rather than an
+            immediate Warning. Bridge and LP thresholds are Radar-calibrated from observed
+            distributions (warning ≈ p95, critical ≈ p99) and are not official protocol health
+            thresholds.
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <SummaryCard label="Total objects" value={data.summary.totalItems} />
         <SummaryCard label="Oracle feeds" value={data.summary.oracleFeedItems} />
@@ -235,10 +272,11 @@ function ThresholdGroup({
 }) {
   return (
     <div>
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-1 flex items-center gap-2">
         <h2 className="font-semibold">{MONITOR_TYPE_LABEL[type]}</h2>
         <Badge variant="secondary">{items.length}</Badge>
       </div>
+      <p className="mb-3 text-xs text-muted-foreground">{MONITOR_TYPE_NOTE[type]}</p>
       <div className="space-y-3">
         {items.map((item) => (
           <ThresholdRow key={`${item.objectType}:${item.objectId}`} item={item} />
@@ -266,6 +304,7 @@ function ThresholdRow({ item }: { item: SceThresholdItem }) {
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             {item.purpose && <Badge variant="outline">{item.purpose.replace(/_/g, " ")}</Badge>}
+            <VerificationBadge item={item} />
             <Badge variant="secondary">{item.status.replace(/_/g, " ")}</Badge>
           </div>
         </div>
@@ -338,6 +377,57 @@ function ThresholdRow({ item }: { item: SceThresholdItem }) {
   );
 }
 
+type ThresholdTone = "watch" | "warning" | "critical" | "resolved";
+
+const TONE_TEXT_CLASS: Record<ThresholdTone, string> = {
+  watch: "text-blue-500",
+  warning: "text-orange-500",
+  critical: "text-red-500",
+  resolved: "text-green-500",
+};
+
+const TONE_DOT_CLASS: Record<ThresholdTone, string> = {
+  watch: "bg-blue-500",
+  warning: "bg-orange-500",
+  critical: "bg-red-500",
+  resolved: "bg-green-500",
+};
+
+function ThresholdLegend({
+  tone,
+  label,
+  desc,
+}: {
+  tone: ThresholdTone;
+  label: string;
+  desc: string;
+}) {
+  return (
+    <p className="flex items-start gap-2">
+      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TONE_DOT_CLASS[tone]}`} />
+      <span>
+        <span className="font-medium text-foreground">{label}</span> — {desc}
+      </span>
+    </p>
+  );
+}
+
+// Doctrine §4: "verified" is not docs-only. Only badge an object as verified
+// when its official metadata status says so AND an official source URL backs it;
+// otherwise surface the honest state (unverified / internal / diagnostic).
+function VerificationBadge({ item }: { item: SceThresholdItem }) {
+  const status = item.officialMetadataStatus?.trim().toLowerCase() ?? null;
+  if (!status) return null;
+
+  const isVerified = status === "verified" && Boolean(item.officialSourceUrl);
+  if (isVerified) {
+    return <Badge variant="resolved">verified</Badge>;
+  }
+
+  const label = status === "verified" ? "unverified" : status.replace(/_/g, " ");
+  return <Badge variant="outline">{label}</Badge>;
+}
+
 function ThresholdStat({
   label,
   value,
@@ -345,16 +435,9 @@ function ThresholdStat({
 }: {
   label: string;
   value: string;
-  tone?: "watch" | "warning" | "critical";
+  tone?: ThresholdTone;
 }) {
-  const toneClass =
-    tone === "critical"
-      ? "text-red-500"
-      : tone === "warning"
-        ? "text-orange-500"
-        : tone === "watch"
-          ? "text-yellow-500"
-          : "text-foreground";
+  const toneClass = tone ? TONE_TEXT_CLASS[tone] : "text-foreground";
   return (
     <div>
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>

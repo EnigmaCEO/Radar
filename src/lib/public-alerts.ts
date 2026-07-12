@@ -24,6 +24,12 @@ export interface PublicRadarAlert {
   thresholdName: string | null;
   observedValueLabel: string | null;
   thresholdValueLabel: string | null;
+  declaredHeartbeatSeconds: number | null;
+  appliedThresholdSeconds: number | null;
+  appliedThresholdKind: string | null;
+  thresholdSourceLabel: string | null;
+  evidenceState: string | null;
+  publicVerificationState: string | null;
   lastSuccessfulObservationAt: string | null;
   lastObservationAttemptAt: string | null;
   consecutiveFailedCycles: number | null;
@@ -61,6 +67,12 @@ export function toPublicRadarAlert(alert: SceAlert): PublicRadarAlert {
     thresholdName: alert.thresholdName ?? null,
     observedValueLabel: alert.observedValueLabel ?? null,
     thresholdValueLabel: alert.thresholdValueLabel ?? null,
+    declaredHeartbeatSeconds: alert.declaredHeartbeatSeconds ?? null,
+    appliedThresholdSeconds: alert.appliedThresholdSeconds ?? null,
+    appliedThresholdKind: alert.appliedThresholdKind ?? null,
+    thresholdSourceLabel: alert.thresholdSourceLabel ?? null,
+    evidenceState: alert.evidenceState ?? null,
+    publicVerificationState: alert.publicVerificationState ?? null,
     lastSuccessfulObservationAt: alert.lastSuccessfulObservationAt ?? null,
     lastObservationAttemptAt: alert.lastObservationAttemptAt ?? null,
     consecutiveFailedCycles: alert.consecutiveFailedCycles ?? null,

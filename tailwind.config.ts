@@ -55,6 +55,7 @@ const config: Config = {
           watch: "hsl(var(--radar-watch))",
           warning: "hsl(var(--radar-warning))",
           critical: "hsl(var(--radar-critical))",
+          resolved: "hsl(var(--radar-resolved))",
         },
       },
       borderRadius: {

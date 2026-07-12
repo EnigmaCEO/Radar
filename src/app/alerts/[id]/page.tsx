@@ -29,6 +29,20 @@ function statusLabel(status: string, isCoverageGap: boolean): string {
   return status;
 }
 
+function statusVariant(status: string): "resolved" | "secondary" {
+  return status.toLowerCase() === "resolved" ? "resolved" : "secondary";
+}
+
+function formatSeconds(value: number): string {
+  if (value < 60) return `${value}s`;
+  if (value < 3600) {
+    const m = value / 60;
+    return `${Number.isInteger(m) ? m : m.toFixed(1)}m`;
+  }
+  const h = value / 3600;
+  return `${Number.isInteger(h) ? h : h.toFixed(1)}h`;
+}
+
 function detailRows(alert: ReturnType<typeof toPublicRadarAlert>) {
   if (!alert) return [];
   return [
@@ -60,6 +74,19 @@ export default async function PublicAlertDetailPage({
   const publicAlert = toPublicRadarAlert(alert);
   const session = await auth0.getSession();
   const rows = detailRows(publicAlert);
+  const verificationState = (
+    publicAlert.publicVerificationState ??
+    publicAlert.evidenceState ??
+    ""
+  ).toLowerCase();
+  const isVerified = verificationState === "verified";
+  const hasEvidenceReceipt = Boolean(
+    publicAlert.publicVerificationState ||
+      publicAlert.declaredHeartbeatSeconds !== null ||
+      publicAlert.appliedThresholdSeconds !== null ||
+      publicAlert.lastSuccessfulObservationAt ||
+      publicAlert.thresholdSourceLabel,
+  );
   const isCoverageGap = isCoverageGapAlert({
     signalClass: alert.signalClass,
     reasonCode: alert.reasonCode,
@@ -89,7 +116,7 @@ export default async function PublicAlertDetailPage({
               ) : (
                 <Badge variant={severityVariant(alert.severity)}>{alert.severity}</Badge>
               )}
-              <Badge variant="secondary">{statusLabel(alert.status, isCoverageGap)}</Badge>
+              <Badge variant={statusVariant(alert.status)}>{statusLabel(alert.status, isCoverageGap)}</Badge>
               <Badge variant="secondary">{publicAlert.monitorType}</Badge>
             </div>
             <div>
@@ -191,6 +218,76 @@ export default async function PublicAlertDetailPage({
             </CardContent>
           </Card>
 
+          {hasEvidenceReceipt && (
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle className="text-base">Evidence receipt</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {publicAlert.publicVerificationState && (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    {isVerified ? (
+                      <Badge variant="resolved">verified</Badge>
+                    ) : (
+                      <Badge variant="secondary">
+                        {publicAlert.publicVerificationState.replace(/_/g, " ")}
+                      </Badge>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Verified requires an observed on-chain read, official feed metadata confirming
+                      the declared heartbeat, and a matching Radar config.
+                    </p>
+                  </div>
+                )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {publicAlert.declaredHeartbeatSeconds !== null && (
+                    <EvidenceRow
+                      label="Declared heartbeat (official feed metadata)"
+                      value={formatSeconds(publicAlert.declaredHeartbeatSeconds)}
+                    />
+                  )}
+                  {publicAlert.appliedThresholdSeconds !== null && (
+                    <EvidenceRow
+                      label={`Applied threshold${
+                        publicAlert.appliedThresholdKind
+                          ? ` (${publicAlert.appliedThresholdKind})`
+                          : ""
+                      }`}
+                      value={formatSeconds(publicAlert.appliedThresholdSeconds)}
+                    />
+                  )}
+                  {publicAlert.lastSuccessfulObservationAt && (
+                    <EvidenceRow
+                      label="Observed age"
+                      value={`${formatDurationBetween(publicAlert.lastSuccessfulObservationAt)} ago`}
+                    />
+                  )}
+                  {publicAlert.thresholdSourceLabel && (
+                    <EvidenceRow label="Threshold source" value={publicAlert.thresholdSourceLabel} />
+                  )}
+                </div>
+                {publicAlert.lastSuccessfulObservationAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Observed at{" "}
+                    <LocalDateTime
+                      value={publicAlert.lastSuccessfulObservationAt}
+                      preset="detailed"
+                    />
+                    {publicAlert.lastObservationAttemptAt && (
+                      <>
+                        {" · last attempt "}
+                        <LocalDateTime
+                          value={publicAlert.lastObservationAttemptAt}
+                          preset="detailed"
+                        />
+                      </>
+                    )}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {(publicAlert.severityExplanation ||
             publicAlert.thresholdExplanation ||
             publicAlert.evidenceExplanation ||
@@ -251,6 +348,15 @@ export default async function PublicAlertDetailPage({
         </div>
       </main>
       <Footer />
+    </div>
+  );
+}
+
+function EvidenceRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-sm">{value}</p>
     </div>
   );
 }

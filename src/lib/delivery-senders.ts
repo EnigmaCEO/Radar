@@ -47,14 +47,18 @@ const ANNOUNCEMENT_HASHTAG_LIMIT = 6;
 const ANNOUNCEMENT_CASHTAG_LIMIT = 4;
 const ANNOUNCEMENT_QUOTE_TOKEN_DENYLIST = new Set(["USD"]);
 
+// Radar Alert Threshold Doctrine v1.0 legend: watch blue, warning orange,
+// critical red. (info falls through to brand purple.)
 function severityColor(severity: string): number {
   switch (severity) {
     case "critical":
       return 0xdc2626;
     case "warning":
       return 0xf97316;
+    case "watch":
+      return 0x3b82f6;
     default:
-      return 0xeab308;
+      return 0x8b5cf6;
   }
 }
 

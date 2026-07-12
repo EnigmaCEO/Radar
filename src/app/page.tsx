@@ -24,14 +24,14 @@ const TELEGRAM_INVITE_URL = "https://t.me/+g4OJXj2i4bM1YmIx";
 // ── Sample signal feed ───────────────────────────────────────────────────────
 
 const SEV_COLOR: Record<string, string> = {
-  watch: "bg-yellow-400",
+  watch: "bg-blue-400",
   warning: "bg-orange-400",
   critical: "bg-red-500",
   info: "bg-purple-400",
 };
 
 const SEV_TEXT: Record<string, string> = {
-  watch: "text-yellow-400",
+  watch: "text-blue-400",
   warning: "text-orange-400",
   critical: "text-red-400",
   info: "text-purple-400",

@@ -145,7 +145,7 @@ export default function DashboardPage() {
             <div className="mt-1 flex gap-2">
               {criticalCount > 0 && <span className="text-xs text-red-500">{criticalCount} critical</span>}
               {warningCount > 0 && <span className="text-xs text-orange-500">{warningCount} warning</span>}
-              {watchCount > 0 && <span className="text-xs text-yellow-500">{watchCount} watch</span>}
+              {watchCount > 0 && <span className="text-xs text-blue-500">{watchCount} watch</span>}
             </div>
           </CardContent>
         </Card>
@@ -304,7 +304,7 @@ export default function DashboardPage() {
                             ? "text-red-500"
                             : alert.severity === "warning"
                               ? "text-orange-500"
-                              : "text-yellow-500"
+                              : "text-blue-500"
                       }`}
                     />
                     <div className="min-w-0">
