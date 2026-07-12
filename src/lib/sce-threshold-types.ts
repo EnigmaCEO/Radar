@@ -1,5 +1,5 @@
 // Types mirroring the SCE backend RadarThreshold* models (camelCase as returned
-// by GET /v1/radar/thresholds). See apps/api/app/radar/models.py and
+// by GET /v1/sce/radar/thresholds). See apps/api/app/radar/models.py and
 // apps/api/app/radar/threshold_registry.py in the SCE repo.
 
 export type SceThresholdMonitorType = "oracle" | "oracle_reference" | "bridge" | "lp";
