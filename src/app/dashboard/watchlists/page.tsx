@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Pencil, Plus, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
@@ -8,6 +8,7 @@ import { useAccount } from "@/lib/account-context";
 import {
   allowsPrivateWatchlists,
   getPlanLabel,
+  getWatchlistLimit,
   resolvePlan,
 } from "@/lib/plan-limits";
 import type { SceCatalogObject, SceCatalogResponse, SceMonitorType } from "@/lib/sce-catalog-types";
@@ -66,6 +67,83 @@ const MATCH_MODE_COLORS: Record<string, string> = {
   all: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
 };
 
+// ── Coverage computation (mirrors backend watchlist-coverage.ts) ─────────────────
+
+const OBJECT_FILTER_KEYS = [
+  "monitorTypes",
+  "providers",
+  "chains",
+  "assets",
+  "objectIds",
+  "tags",
+  "purposes",
+] as const;
+
+interface CoverageSelection {
+  matchMode: "any" | "all";
+  monitorTypes: string[];
+  providers: string[];
+  chains: string[];
+  assets: string[];
+  objectIds: string[];
+  tags: string[];
+  purposes: string[];
+}
+
+function ciEquals(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function includesCi(values: string[], candidate: string | null): boolean {
+  return candidate !== null && values.some((value) => ciEquals(value, candidate));
+}
+
+function objectMatchesDimension(
+  key: (typeof OBJECT_FILTER_KEYS)[number],
+  values: string[],
+  object: SceCatalogObject,
+): boolean {
+  switch (key) {
+    case "monitorTypes":
+      return includesCi(values, object.monitorType);
+    case "providers":
+      return includesCi(values, object.provider);
+    case "chains":
+      return includesCi(values, object.chain);
+    case "assets":
+      return includesCi(values, object.asset ?? object.assetPair);
+    case "objectIds":
+      return values.includes(object.id);
+    case "tags":
+      return object.tags.some((tag) => includesCi(values, tag));
+    case "purposes":
+      return includesCi(values, object.purpose);
+  }
+}
+
+// The set of catalog objects a selection resolves to. Unlike the backend (where an
+// empty selection means "match all"), the builder treats an empty selection as
+// covering nothing — a watchlist is opt-in per object, so coverage counts up from 0.
+function computeCoveredObjectIds(
+  selection: CoverageSelection,
+  objects: SceCatalogObject[],
+): Set<string> {
+  const activeFilters = OBJECT_FILTER_KEYS.map((key) => ({ key, values: selection[key] })).filter(
+    ({ values }) => values.length > 0,
+  );
+  if (activeFilters.length === 0) return new Set();
+
+  const matched = objects.filter((object) => {
+    const dimensions = activeFilters.map(({ key, values }) =>
+      objectMatchesDimension(key, values, object),
+    );
+    return selection.matchMode === "all"
+      ? dimensions.every(Boolean)
+      : dimensions.some(Boolean);
+  });
+  return new Set(matched.map((object) => object.id));
+}
+
 // ── Checklist helper ───────────────────────────────────────────────────────────
 
 function Checklist({
@@ -75,6 +153,7 @@ function Checklist({
   selected,
   onChange,
   disabled,
+  lockUnselected,
 }: {
   label: string;
   options: string[];
@@ -82,6 +161,7 @@ function Checklist({
   selected: string[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
+  lockUnselected?: boolean;
 }) {
   if (options.length === 0) return null;
   return (
@@ -94,7 +174,7 @@ function Checklist({
             <button
               key={opt}
               type="button"
-              disabled={disabled}
+              disabled={disabled || (lockUnselected && !active)}
               onClick={() =>
                 onChange(active ? selected.filter((s) => s !== opt) : [...selected, opt])
               }
@@ -121,16 +201,23 @@ function ObjectPicker({
   selected,
   onChange,
   disabled,
+  lockUnselected,
 }: {
   objects: SceCatalogObject[];
   selectedMonitorTypes: string[];
   selected: string[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
+  lockUnselected?: boolean;
 }) {
   const [viewGroup, setViewGroup] = useState<"all" | SceMonitorType>("all");
 
+  // A row is locked when the plan's object limit is reached and it is not already
+  // selected — you can still deselect to free capacity, but not add more.
+  const isRowLocked = (id: string) => Boolean(lockUnselected) && !selected.includes(id);
+
   function toggle(id: string) {
+    if (isRowLocked(id)) return;
     onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
   }
 
@@ -204,11 +291,15 @@ function ObjectPicker({
                     {MONITOR_TYPE_LABEL[group]} ({items.length})
                   </td>
                 </tr>,
-                ...items.map((o) => (
+                ...items.map((o) => {
+                  const locked = isRowLocked(o.id);
+                  return (
                   <tr
                     key={o.id}
                     onClick={() => toggle(o.id)}
-                    className="cursor-pointer border-b border-border/30 last:border-b-0 hover:bg-muted/50"
+                    className={`border-b border-border/30 last:border-b-0 ${
+                      locked ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-muted/50"
+                    }`}
                   >
                     <td className="px-2 py-1.5 align-top">
                       <input
@@ -216,7 +307,7 @@ function ObjectPicker({
                         checked={selected.includes(o.id)}
                         onChange={() => toggle(o.id)}
                         onClick={(e) => e.stopPropagation()}
-                        disabled={disabled}
+                        disabled={disabled || locked}
                       />
                     </td>
                     <td className="truncate px-2 py-1.5 align-top font-medium" title={o.displayName}>
@@ -248,7 +339,8 @@ function ObjectPicker({
                       )}
                     </td>
                   </tr>
-                )),
+                  );
+                }),
               ];
             })}
           </tbody>
@@ -432,6 +524,28 @@ function WatchlistForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { account } = useAccount();
+  const objectLimit = getWatchlistLimit(account.plan);
+  const planLabel = getPlanLabel(account.plan);
+  const hasLimit = Number.isFinite(objectLimit);
+
+  const coveredIds = useMemo(
+    () =>
+      computeCoveredObjectIds(
+        { matchMode, monitorTypes, providers, chains, assets, objectIds, tags, purposes },
+        catalog.objects,
+      ),
+    [matchMode, monitorTypes, providers, chains, assets, objectIds, tags, purposes, catalog.objects],
+  );
+  const coverageCount = coveredIds.size;
+  const overLimit = hasLimit && coverageCount > objectLimit;
+  const atLimit = hasLimit && coverageCount >= objectLimit;
+  // Only lock additions in "any" mode, where each selection widens coverage. In
+  // "all" mode adding filters narrows coverage, so it must stay available to help
+  // an over-limit selection get back under the cap.
+  const lockAdd = matchMode === "any" && atLimit;
+  const coverageBlocksSave = coverageCount === 0 || overLimit;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -525,6 +639,30 @@ function WatchlistForm({
             </Select>
           </div>
 
+          <div
+            className={`flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 ${
+              overLimit
+                ? "border-destructive/50 bg-destructive/5"
+                : "border-border/60 bg-muted/30"
+            }`}
+          >
+            <span className="text-sm font-medium">
+              Coverage: {coverageCount}
+              {hasLimit ? ` / ${objectLimit}` : ""} object{coverageCount === 1 ? "" : "s"}
+            </span>
+            <span className={`text-xs ${overLimit ? "text-destructive" : "text-muted-foreground"}`}>
+              {coverageCount === 0
+                ? "Select filters or specific objects — a watchlist covers nothing until you do."
+                : overLimit
+                  ? `Over the ${planLabel} limit of ${objectLimit}. Narrow your selection to save.`
+                  : lockAdd
+                    ? `Plan limit reached — deselect to add different objects.`
+                    : hasLimit
+                      ? `${objectLimit - coverageCount} remaining`
+                      : "Monitoring these objects"}
+            </span>
+          </div>
+
           <Checklist
             label="Monitor types"
             options={["oracle", "bridge", "lp"]}
@@ -532,6 +670,7 @@ function WatchlistForm({
             selected={monitorTypes}
             onChange={setMonitorTypes}
             disabled={loading}
+            lockUnselected={lockAdd}
           />
           <Checklist
             label="Signal classes"
@@ -547,6 +686,7 @@ function WatchlistForm({
             selected={providers}
             onChange={setProviders}
             disabled={loading}
+            lockUnselected={lockAdd}
           />
           <Checklist
             label="Chains"
@@ -554,6 +694,7 @@ function WatchlistForm({
             selected={chains}
             onChange={setChains}
             disabled={loading}
+            lockUnselected={lockAdd}
           />
           <Checklist
             label="Assets"
@@ -561,6 +702,7 @@ function WatchlistForm({
             selected={assets}
             onChange={setAssets}
             disabled={loading}
+            lockUnselected={lockAdd}
           />
           <Checklist
             label="Tags"
@@ -568,6 +710,7 @@ function WatchlistForm({
             selected={tags}
             onChange={setTags}
             disabled={loading}
+            lockUnselected={lockAdd}
           />
           <Checklist
             label="Purposes"
@@ -575,6 +718,7 @@ function WatchlistForm({
             selected={purposes}
             onChange={setPurposes}
             disabled={loading}
+            lockUnselected={lockAdd}
           />
 
           <ObjectPicker
@@ -583,12 +727,13 @@ function WatchlistForm({
             selected={objectIds}
             onChange={setObjectIds}
             disabled={loading}
+            lockUnselected={lockAdd}
           />
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={loading}>
+            <Button type="submit" size="sm" disabled={loading || coverageBlocksSave}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               {loading ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create watchlist"}
             </Button>
