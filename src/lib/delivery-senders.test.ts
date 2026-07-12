@@ -234,6 +234,42 @@ describe("payload builders", () => {
     expect(previews[1].text).toContain("$FRAX $USDC");
   });
 
+  it("labels LP liquidity-drop alerts with a noun instead of a naked 'Observed:'", () => {
+    process.env.RADAR_PUBLIC_BASE_URL = "https://radar.example.test/";
+    const previews = buildAnnouncementPreviewMessages(
+      "telegram_bot",
+      [
+        {
+          ...makeAlert({
+            id: "RADAR-ANN-LP-DROP",
+            chain: "Base",
+            provider: "Aerodrome",
+            monitorType: "lp",
+            asset: "cbETH",
+            assetPair: "cbETH/WETH",
+            severity: "critical",
+            reasonCode: "LP_LIQUIDITY_DROP",
+            whatHappened:
+              "Aerodrome SlipStream cbETH/WETH (Base 0.05%) liquidity dropped faster than the configured monitoring band.",
+            // SCE emits a generic, noun-less label for this reason code; Radar
+            // strips the prefix and must supply its own noun.
+            observedValueLabel: "Observed value: 98.7%",
+            thresholdValueLabel: "Threshold: 50.0%",
+          }),
+          eventId: "evt_lp_drop",
+          eventType: "alert_opened",
+        },
+      ],
+      DELIVERY_META,
+    );
+
+    expect(previews).toHaveLength(1);
+    expect(previews[0].text).toContain("Liquidity drop: 98.7%");
+    expect(previews[0].text).toContain("Critical threshold: 50.0%");
+    // Regression: the metric line must not fall through to the generic default.
+    expect(previews[0].text).not.toContain("Observed: 98.7%");
+  });
+
   it("builds announcement-feed payloads for webhook delivery with per-alert structure", () => {
     process.env.RADAR_PUBLIC_BASE_URL = "https://radar.example.test";
     const payload = buildAnnouncementWebhookPayload(

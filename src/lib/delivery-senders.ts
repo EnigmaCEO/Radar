@@ -233,6 +233,14 @@ function announcementMetricLabels(alert: AnnouncementFeedAlert): {
         observedLabel: "Imbalance",
         thresholdLabel: `${severityLabel(alert.severity)} threshold`,
       };
+    case "LP_LIQUIDITY_DROP":
+      // Family-neutral: covers SlipStream/UniV3 (in-range L) and v2 (reserve
+      // proxy) under the same reason code. SCE's whatHappened carries any
+      // pool-family precision.
+      return {
+        observedLabel: "Liquidity drop",
+        thresholdLabel: `${severityLabel(alert.severity)} threshold`,
+      };
     case "BRIDGE_ROUTE_LATENCY":
     case "BRIDGE_ROUTE_DELAYED":
       return {
@@ -253,6 +261,8 @@ function fallbackAnnouncementExplanation(alert: AnnouncementFeedAlert): string {
       return "The price feed is out of date; caution is advised until it updates.";
     case "LP_POOL_IMBALANCE":
       return "Pool balance concentration crossed Radar's threshold.";
+    case "LP_LIQUIDITY_DROP":
+      return "Pool liquidity dropped past Radar's configured monitoring band and is being tracked.";
     case "BRIDGE_ROUTE_LATENCY":
     case "BRIDGE_ROUTE_DELAYED":
       return "Route latency crossed Radar's threshold and is being monitored.";
@@ -265,6 +275,8 @@ function fallbackAnnouncementStatus(alert: AnnouncementFeedAlert): string {
   switch (alert.reasonCode.trim().toUpperCase()) {
     case "LP_POOL_IMBALANCE":
       return "Watching for normalization.";
+    case "LP_LIQUIDITY_DROP":
+      return "Watching for liquidity to recover.";
     case "ORACLE_STALE":
       return "Monitoring for update or resolution.";
     default:
