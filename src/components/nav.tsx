@@ -132,6 +132,7 @@ const dashboardLinks = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/alerts", label: "Alerts" },
   { href: "/dashboard/watchlists", label: "Watchlists" },
+  { href: "/dashboard/thresholds", label: "Thresholds" },
   { href: "/dashboard/destinations", label: "Delivery" },
   { href: "/dashboard/settings", label: "Settings" },
 ];

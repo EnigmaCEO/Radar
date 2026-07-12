@@ -8,6 +8,7 @@ import type {
   SaasMeResponse,
 } from "./api-types";
 import type { SceCatalogResponse } from "./sce-catalog-types";
+import type { SceThresholdResponse } from "./sce-threshold-types";
 import { stripTrailingSlash } from "./utils";
 
 const API_BASE = stripTrailingSlash(
@@ -115,6 +116,10 @@ export async function getAlert(id: string): Promise<RadarAlert> {
 
 export async function getRadarCatalog(): Promise<SceCatalogResponse> {
   return requestSameOrigin<SceCatalogResponse>("/api/radar/catalog");
+}
+
+export async function getRadarThresholds(): Promise<SceThresholdResponse> {
+  return requestSameOrigin<SceThresholdResponse>("/api/radar/thresholds");
 }
 
 // ── Clients ───────────────────────────────────────────────────────────────────
