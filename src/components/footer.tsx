@@ -5,7 +5,7 @@ export function Footer() {
   return (
     <footer className="border-t border-border bg-background py-12">
       <div className="container mx-auto max-w-screen-xl px-4">
-        <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-8 md:grid-cols-5">
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="mb-3 flex items-center gap-2 font-semibold text-foreground">
               <Logo size={20} />
@@ -56,6 +56,32 @@ export function Footer() {
                 <Link href="/terms" className="hover:text-foreground transition-colors">
                   Terms
                 </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="mb-3 text-sm font-semibold text-foreground">Community</h4>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>
+                <a
+                  href="https://discord.gg/FPFabKwyW"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-foreground transition-colors"
+                >
+                  Discord
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://t.me/+g4OJXj2i4bM1YmIx"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-foreground transition-colors"
+                >
+                  Telegram
+                </a>
               </li>
             </ul>
           </div>

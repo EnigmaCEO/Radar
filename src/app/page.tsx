@@ -18,6 +18,9 @@ function buildSignupHref(plan?: "watch" | "radar_intel" | "radar_signal") {
   return `/login?${params.toString()}`;
 }
 
+const DISCORD_INVITE_URL = "https://discord.gg/FPFabKwyW";
+const TELEGRAM_INVITE_URL = "https://t.me/+g4OJXj2i4bM1YmIx";
+
 // ── Sample signal feed ───────────────────────────────────────────────────────
 
 const SEV_COLOR: Record<string, string> = {
@@ -375,6 +378,26 @@ export default async function LandingPage() {
               <Button size="lg" variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white hover:border-white/25" asChild>
                 <Link href="#pricing">See pricing</Link>
               </Button>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-400">
+              <span className="text-slate-500">Join the feed:</span>
+              <a
+                href={DISCORD_INVITE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-200 transition-colors hover:border-violet-400/40 hover:text-white"
+              >
+                Discord
+              </a>
+              <a
+                href={TELEGRAM_INVITE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-200 transition-colors hover:border-violet-400/40 hover:text-white"
+              >
+                Telegram
+              </a>
             </div>
           </div>
         </div>

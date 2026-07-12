@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/logo";
@@ -11,6 +12,19 @@ const navLinks = [
   { href: "/#features", label: "Features" },
   { href: "/alerts", label: "Alerts" },
   { href: "/pricing", label: "Pricing" },
+];
+
+const communityLinks = [
+  {
+    href: "https://discord.gg/FPFabKwyW",
+    label: "Discord",
+    iconSrc: "/brands/discord-symbol-official.svg",
+  },
+  {
+    href: "https://t.me/+g4OJXj2i4bM1YmIx",
+    label: "Telegram",
+    iconSrc: "/brands/telegram-logo-official.svg",
+  },
 ];
 
 export function Nav() {
@@ -62,6 +76,32 @@ export function Nav() {
         )}
 
         <div className="flex items-center gap-2">
+          {isMarketing && (
+            <div className="flex items-center gap-1">
+              {communityLinks.map((link) => {
+                return (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={link.label}
+                    title={link.label}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    <Image
+                      src={link.iconSrc}
+                      alt=""
+                      aria-hidden="true"
+                      width={16}
+                      height={16}
+                      className="h-4 w-4"
+                    />
+                  </a>
+                );
+              })}
+            </div>
+          )}
           <ThemeToggle className={isMarketing ? "text-slate-300 hover:text-white hover:bg-white/10" : ""} />
           {isMarketing && (
             <>
