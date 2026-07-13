@@ -16,11 +16,15 @@ export type EffectiveRadarPlan =
   | "desk";
 export type ResolvedRadarPlan = EffectiveRadarPlan | "internal";
 
+function isAdminOverride(isAdmin?: boolean): boolean {
+  return isAdmin === true;
+}
+
 const PLAN_ALIAS_MAP: Record<string, EffectiveRadarPlan> = {
   free: "public_record",
   public_record: "public_record",
   watch: "watch",
-  radar_live: "radar_intel",
+  radar_live: "watch",
   radar_intel: "radar_intel",
   radar: "radar_signal",
   radar_pro: "radar_signal",
@@ -41,7 +45,7 @@ const PLAN_LABELS: Record<ResolvedRadarPlan, string> = {
 const PLAN_PRIVATE_OBJECT_LIMITS: Record<ResolvedRadarPlan, number> = {
   public_record: 0,
   watch: 5,
-  radar_signal: 25,
+  radar_signal: Infinity,
   radar_intel: 0,
   desk: Infinity,
   internal: Infinity,
@@ -49,7 +53,7 @@ const PLAN_PRIVATE_OBJECT_LIMITS: Record<ResolvedRadarPlan, number> = {
 
 const PLAN_HISTORY_DAYS: Record<ResolvedRadarPlan, number | null> = {
   public_record: 0,
-  watch: 7,
+  watch: 30,
   radar_signal: 90,
   radar_intel: 0,
   desk: null,
@@ -85,7 +89,8 @@ const PLAN_DESTINATION_LIMITS: Record<ResolvedRadarPlan, number> = {
   internal: Infinity,
 };
 
-export function resolvePlan(plan: string): ResolvedRadarPlan {
+export function resolvePlan(plan: string, isAdmin = false): ResolvedRadarPlan {
+  if (isAdminOverride(isAdmin)) return "internal";
   return PLAN_ALIAS_MAP[plan] ?? "internal";
 }
 
@@ -111,9 +116,10 @@ function normalizeSubscriptionStatus(status: string): string {
 export function hasActivePlan(account: {
   plan: string;
   status: string;
+  isAdmin?: boolean;
   stripeSubId?: string | null;
 }): boolean {
-  const resolved = resolvePlan(account.plan);
+  const resolved = resolvePlan(account.plan, account.isAdmin);
   if (resolved === "internal") return true;
   if (resolved === "public_record") return false;
 
@@ -128,43 +134,43 @@ export function hasActivePlan(account: {
   return Boolean(account.stripeSubId);
 }
 
-export function getPlanLabel(plan: string): string {
-  return PLAN_LABELS[resolvePlan(plan)];
+export function getPlanLabel(plan: string, isAdmin = false): string {
+  return PLAN_LABELS[resolvePlan(plan, isAdmin)];
 }
 
-export function getPrivateObjectLimit(plan: string): number {
-  return PLAN_PRIVATE_OBJECT_LIMITS[resolvePlan(plan)];
+export function getPrivateObjectLimit(plan: string, isAdmin = false): number {
+  return PLAN_PRIVATE_OBJECT_LIMITS[resolvePlan(plan, isAdmin)];
 }
 
-export function getWatchlistLimit(plan: string): number {
-  return getPrivateObjectLimit(plan);
+export function getWatchlistLimit(plan: string, isAdmin = false): number {
+  return getPrivateObjectLimit(plan, isAdmin);
 }
 
-export function allowsPrivateWatchlists(plan: string): boolean {
-  return getPrivateObjectLimit(plan) > 0;
+export function allowsPrivateWatchlists(plan: string, isAdmin = false): boolean {
+  return getPrivateObjectLimit(plan, isAdmin) > 0;
 }
 
-export function getPrivateHistoryDays(plan: string): number | null {
-  return PLAN_HISTORY_DAYS[resolvePlan(plan)];
+export function getPrivateHistoryDays(plan: string, isAdmin = false): number | null {
+  return PLAN_HISTORY_DAYS[resolvePlan(plan, isAdmin)];
 }
 
-export function getAllowedDestinationChannels(plan: string): DestinationChannel[] {
-  return PLAN_DESTINATION_CHANNELS[resolvePlan(plan)];
+export function getAllowedDestinationChannels(plan: string, isAdmin = false): DestinationChannel[] {
+  return PLAN_DESTINATION_CHANNELS[resolvePlan(plan, isAdmin)];
 }
 
-export function canConfigurePrivateDestinations(plan: string): boolean {
-  return getAllowedDestinationChannels(plan).length > 0;
+export function canConfigurePrivateDestinations(plan: string, isAdmin = false): boolean {
+  return getAllowedDestinationChannels(plan, isAdmin).length > 0;
 }
 
-export function getAllowedDeliveryModes(plan: string): DeliveryMode[] {
-  return PLAN_DELIVERY_MODES[resolvePlan(plan)];
+export function getAllowedDeliveryModes(plan: string, isAdmin = false): DeliveryMode[] {
+  return PLAN_DELIVERY_MODES[resolvePlan(plan, isAdmin)];
 }
 
-export function getDestinationLimit(plan: string): number {
-  return PLAN_DESTINATION_LIMITS[resolvePlan(plan)];
+export function getDestinationLimit(plan: string, isAdmin = false): number {
+  return PLAN_DESTINATION_LIMITS[resolvePlan(plan, isAdmin)];
 }
 
-export function canRunManualDelivery(plan: string): boolean {
-  const resolved = resolvePlan(plan);
+export function canRunManualDelivery(plan: string, isAdmin = false): boolean {
+  const resolved = resolvePlan(plan, isAdmin);
   return resolved === "radar_signal" || resolved === "desk" || resolved === "internal";
 }

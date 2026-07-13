@@ -30,6 +30,7 @@ describe("getAccount bootstrap", () => {
     vi.mocked(bootstrapRadarAccount).mockResolvedValue({
       id: "acct_new",
       ownerSub: "auth0|new-user",
+      isAdmin: false,
     } as never);
 
     const result = await getAccount();

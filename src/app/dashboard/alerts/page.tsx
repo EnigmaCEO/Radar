@@ -11,6 +11,7 @@ import {
   humanizeReasonCode,
   isCoverageGapAlert,
 } from "@/lib/alert-classification";
+import { formatThresholdValueWithRule, humanizeThresholdRule } from "@/lib/alert-threshold-display";
 import { correlateAlerts, type CorrelatedAlertGroup, type CorrelatedAlertListItem } from "@/lib/alert-correlation";
 import { groupCoverageGapAlerts, type CoverageGapGroup } from "@/lib/coverage-gap-grouping";
 import { sortAlertsByUpdatedAt } from "@/lib/alert-feed";
@@ -146,7 +147,12 @@ function coverageCause(alert: RadarAlert): string {
 function alertMetricLine(alert: RadarAlert): Array<string> {
   const parts: string[] = [];
   if (alert.observedValueLabel) parts.push(alert.observedValueLabel);
-  if (alert.thresholdValueLabel) parts.push(alert.thresholdValueLabel);
+  const thresholdValueWithRule = formatThresholdValueWithRule({
+    thresholdValueLabel: alert.thresholdValueLabel,
+    thresholdName: alert.thresholdName,
+    appliedThresholdKind: alert.appliedThresholdKind,
+  });
+  if (thresholdValueWithRule) parts.push(thresholdValueWithRule);
   return parts;
 }
 
@@ -186,13 +192,15 @@ function thresholdContractLine(alert: RadarAlert): Array<string> {
   const parts: string[] = [];
   const declaredHeartbeat = formatSecondsLabel(alert.declaredHeartbeatSeconds);
   const appliedThreshold = formatSecondsLabel(alert.appliedThresholdSeconds);
-  const appliedThresholdKind = humanizeContractState(alert.appliedThresholdKind);
+  const appliedThresholdKind =
+    humanizeThresholdRule(alert.appliedThresholdKind) ??
+    humanizeContractState(alert.appliedThresholdKind);
 
   if (declaredHeartbeat) parts.push(`Declared heartbeat: ${declaredHeartbeat}`);
   if (appliedThreshold) {
     parts.push(
       appliedThresholdKind
-        ? `Applied ${appliedThresholdKind}: ${appliedThreshold}`
+        ? `${appliedThresholdKind}: ${appliedThreshold}`
         : `Applied threshold: ${appliedThreshold}`,
     );
   }

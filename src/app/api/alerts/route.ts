@@ -100,8 +100,8 @@ export async function GET(request: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const account = await bootstrapRadarAccount(session);
-  if (!allowsPrivateWatchlists(account.plan)) {
-    const resolvedPlan = resolvePlan(account.plan);
+  if (!allowsPrivateWatchlists(account.plan, account.isAdmin)) {
+    const resolvedPlan = resolvePlan(account.plan, account.isAdmin);
     return NextResponse.json(
       {
         error:
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
   const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(limitParam, 200)) : 100;
 
   try {
-    const historyDays = getPrivateHistoryDays(account.plan);
+    const historyDays = getPrivateHistoryDays(account.plan, account.isAdmin);
     const alerts = await fetchSceAlerts({ status, limit });
     const filtered = alerts
       .filter((alert) => (severity ? alert.severity === severity : true))

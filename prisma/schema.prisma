@@ -13,6 +13,7 @@ model RadarAccount {
   id               String   @id @default(cuid())
   ownerSub         String   @unique          // Auth0 subject identifier
   name             String   @default("")
+  isAdmin          Boolean  @default(false)
   plan             String   @default("free") // free | radar_live | radar_pro | managed
   status           String   @default("trial") // trial | active | past_due | suspended | canceled
   stripeCustomerId String?  @unique
@@ -37,6 +38,7 @@ model RadarWatchlist {
   name        String
   description String?
   enabled     Boolean @default(true)
+  scopeType   String?
 
   matchMode   String @default("any") // any | all
   minSeverity String @default("watch") // watch | warning | critical

@@ -4,6 +4,7 @@ import { WatchlistValidationError, validateWatchlistFilters } from "./watchlist-
 describe("validateWatchlistFilters", () => {
   it("accepts a full valid payload and returns all filter fields", () => {
     const result = validateWatchlistFilters({
+      scopeType: "asset_lens",
       matchMode: "all",
       minSeverity: "critical",
       signalClasses: ["alert", "coverage"],
@@ -18,6 +19,7 @@ describe("validateWatchlistFilters", () => {
     });
 
     expect(result).toEqual({
+      scopeType: "asset_lens",
       matchMode: "all",
       minSeverity: "critical",
       signalClasses: ["alert", "coverage"],
@@ -35,6 +37,16 @@ describe("validateWatchlistFilters", () => {
   it("omits fields that are not present in the input (for partial PATCH updates)", () => {
     const result = validateWatchlistFilters({ chains: ["arbitrum"] });
     expect(result).toEqual({ chains: ["arbitrum"] });
+  });
+
+  it("accepts null scopeType for legacy watchlists", () => {
+    expect(validateWatchlistFilters({ scopeType: null })).toEqual({ scopeType: null });
+  });
+
+  it("rejects an invalid scopeType value", () => {
+    expect(() => validateWatchlistFilters({ scopeType: "mixed_scope" })).toThrow(
+      WatchlistValidationError,
+    );
   });
 
   it("rejects an invalid monitorType value", () => {

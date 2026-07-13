@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionData } from "@auth0/nextjs-auth0/types";
+vi.mock("next/headers", () => ({ headers: vi.fn() }));
+
+import { headers } from "next/headers";
 import {
   bootstrapRadarAccount,
   forwardRadarApiRequest,
@@ -21,6 +24,7 @@ const session = {
 describe("radar-api-backend", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(headers).mockRejectedValue(new Error("outside request scope"));
     process.env.RADAR_API_BASE_URL = "https://radar-api.example.com/";
     process.env.RADAR_API_SHARED_SECRET = "shared-secret";
   });
@@ -78,6 +82,26 @@ describe("radar-api-backend", () => {
     expect(headers.get("Content-Type")).toBe("application/json");
     expect(headers.get("x-radar-api-key")).toBe("shared-secret");
     expect(headers.get("x-radar-auth0-sub")).toBe("auth0|abc");
+  });
+
+  it("marks localhost-origin requests as local dev", async () => {
+    vi.mocked(headers).mockResolvedValue(
+      new Headers({
+        host: "localhost:3000",
+      }) as never,
+    );
+    const fetchMock = vi.spyOn(global, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+
+    await forwardRadarApiRequest("/v1/watchlists", {
+      method: "POST",
+      session,
+      body: '{"name":"All"}',
+      contentType: "application/json",
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const requestHeaders = new Headers(init.headers);
+    expect(requestHeaders.get("x-radar-local-dev")).toBe("true");
   });
 
   it("forwards webhook payloads with only the shared secret and passthrough headers", async () => {

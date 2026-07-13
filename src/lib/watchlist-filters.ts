@@ -2,6 +2,17 @@ export const WATCHLIST_MONITOR_TYPES = ["oracle", "bridge", "lp"] as const;
 export const WATCHLIST_SIGNAL_CLASSES = ["alert", "warning", "watch", "coverage"] as const;
 export const WATCHLIST_SEVERITIES = ["watch", "warning", "critical"] as const;
 export const WATCHLIST_MATCH_MODES = ["any", "all"] as const;
+export const WATCHLIST_SCOPE_TYPES = [
+  "exact_objects",
+  "asset_lens",
+  "chain_lens",
+  "provider_lens",
+  "pillar_lens",
+  "full_catalog",
+  "custom_monitor",
+] as const;
+
+export type WatchlistScopeType = (typeof WATCHLIST_SCOPE_TYPES)[number];
 
 export class WatchlistValidationError extends Error {}
 
@@ -25,6 +36,7 @@ function validateFreeformArray(value: unknown, field: string): string[] {
 }
 
 export interface WatchlistFilterFields {
+  scopeType: WatchlistScopeType | null;
   matchMode: string;
   minSeverity: string;
   signalClasses: string[];
@@ -43,6 +55,16 @@ export interface WatchlistFilterFields {
 // values for partial (PATCH) updates.
 export function validateWatchlistFilters(body: Record<string, unknown>): Partial<WatchlistFilterFields> {
   const result: Partial<WatchlistFilterFields> = {};
+
+  if (body.scopeType !== undefined) {
+    if (
+      body.scopeType !== null &&
+      (typeof body.scopeType !== "string" || !WATCHLIST_SCOPE_TYPES.includes(body.scopeType as never))
+    ) {
+      throw new WatchlistValidationError(`scopeType must be one of: ${WATCHLIST_SCOPE_TYPES.join(", ")}.`);
+    }
+    result.scopeType = body.scopeType as WatchlistScopeType | null;
+  }
 
   if (body.matchMode !== undefined) {
     if (typeof body.matchMode !== "string" || !WATCHLIST_MATCH_MODES.includes(body.matchMode as never)) {

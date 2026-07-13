@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, Bell, Check, Globe, Shield, Zap, Activity } 
 import { Nav } from "@/components/nav";
 import { Footer } from "@/components/footer";
 import { getMonitoredValueUsd, formatUsd } from "@/lib/radar-stats";
+import { PRICING_PLAN_CONTENT, splitPlanPrice } from "@/lib/pricing-content";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -93,81 +94,30 @@ const features = [
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
 
-const plans = [
-  {
-    name: "Watch",
-    slug: "watch",
-    price: "$29",
-    priceSub: "/mo",
-    description: "Personal monitoring for selected infrastructure objects.",
-    tag: null,
-    features: [
-      "Up to 5 watchlist objects",
-      "Telegram & Discord alerts",
-      "7-day event history",
-    ],
-    cta: "Get started",
-    ctaHref: buildSignupHref("watch"),
-    highlight: false,
-  },
-  {
-    name: "Intel",
-    slug: "radar_intel",
-    price: "$99",
-    priceSub: "/mo",
-    description: "Aggregate Radar intelligence without private monitoring.",
-    tag: null,
-    features: [
-      "Provider reliability scores",
-      "Infrastructure health trends",
-      "Weekly & monthly reports",
-      "Deep aggregate history",
-      "Aggregate CSV exports",
-    ],
-    cta: "Get started",
-    ctaHref: buildSignupHref("radar_intel"),
-    highlight: false,
-  },
-  {
-    name: "Signal",
-    slug: "radar_signal",
-    price: "$149",
-    priceSub: "/mo",
-    description: "Private exposure monitoring with correlation and delivery.",
-    tag: "Core product",
-    features: [
-      "Up to 25 watchlist objects",
-      {
-        label: "Correlation & exposure groups",
-        detail: "Know when related parts of your position break together.",
-      },
-      "Telegram, Discord & webhook alerts",
-      "90-day event history",
-    ],
-    cta: "Get started",
-    ctaHref: buildSignupHref("radar_signal"),
-    highlight: true,
-  },
-  {
-    name: "Desk",
-    slug: "desk",
-    price: "From $2,500",
-    priceSub: "/mo",
-    description: "Institutional state data, review, and integration.",
-    tag: null,
-    features: [
-      "Full raw event history",
-      "API access",
-      "Custom monitoring",
-      "Support SLA",
-      "Alert exporting",
-      "Custom reporting",
-    ],
-    cta: "Talk to us",
-    ctaHref: "/request-access",
-    highlight: false,
-  },
-];
+const plans = PRICING_PLAN_CONTENT.map((plan) => {
+  const price = splitPlanPrice(plan.priceLabel);
+  return {
+    name: plan.name,
+    slug: plan.slug,
+    price: price.amount,
+    priceSub: price.suffix,
+    description: plan.description,
+    tag: plan.badge ?? null,
+    features: plan.features.map((feature) =>
+      feature.detail ? { label: feature.text, detail: feature.detail } : feature.text,
+    ),
+    cta: plan.slug === "desk" ? "Talk to us" : "Get started",
+    ctaHref:
+      plan.slug === "watch"
+        ? buildSignupHref("watch")
+        : plan.slug === "radar_intel"
+          ? buildSignupHref("radar_intel")
+          : plan.slug === "radar_signal"
+            ? buildSignupHref("radar_signal")
+            : "/request-access",
+    highlight: plan.slug === "radar_signal",
+  };
+});
 
 // ── Coverage ──────────────────────────────────────────────────────────────────
 

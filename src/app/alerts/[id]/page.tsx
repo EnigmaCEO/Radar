@@ -8,6 +8,10 @@ import {
   isCoverageGapAlert,
 } from "@/lib/alert-classification";
 import { formatDurationBetween } from "@/lib/alert-time";
+import {
+  cleanThresholdValueLabel,
+  humanizeThresholdRule,
+} from "@/lib/alert-threshold-display";
 import { auth0 } from "@/lib/auth0";
 import { buildMonitorCtaHref, toPublicRadarAlert } from "@/lib/public-alerts";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +49,11 @@ function formatSeconds(value: number): string {
 
 function detailRows(alert: ReturnType<typeof toPublicRadarAlert>) {
   if (!alert) return [];
+  const thresholdRule = humanizeThresholdRule(alert.thresholdName) ?? alert.thresholdName ?? null;
+  const thresholdValue = cleanThresholdValueLabel(alert.thresholdValueLabel) ?? null;
+  const expectedHeartbeat =
+    alert.declaredHeartbeatSeconds !== null ? formatSeconds(alert.declaredHeartbeatSeconds) : null;
+
   return [
     ["Monitor type", alert.monitorType],
     ["Provider", alert.provider],
@@ -53,9 +62,10 @@ function detailRows(alert: ReturnType<typeof toPublicRadarAlert>) {
     ["Asset pair", alert.assetPair ?? null],
     ["Route", alert.route],
     ["Pool", alert.poolName ?? null],
-    ["Threshold", alert.thresholdName ?? null],
+    ["Threshold rule", thresholdRule],
+    ["Expected heartbeat", expectedHeartbeat],
     ["Observed value", alert.observedValueLabel ?? null],
-    ["Threshold value", alert.thresholdValueLabel ?? null],
+    ["Applied threshold", thresholdValue],
   ].filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0);
 }
 
@@ -248,11 +258,10 @@ export default async function PublicAlertDetailPage({
                   )}
                   {publicAlert.appliedThresholdSeconds !== null && (
                     <EvidenceRow
-                      label={`Applied threshold${
-                        publicAlert.appliedThresholdKind
-                          ? ` (${publicAlert.appliedThresholdKind})`
-                          : ""
-                      }`}
+                      label={
+                        humanizeThresholdRule(publicAlert.appliedThresholdKind) ??
+                        "Applied threshold"
+                      }
                       value={formatSeconds(publicAlert.appliedThresholdSeconds)}
                     />
                   )}

@@ -109,8 +109,8 @@ const DAILY_DIGEST_FREQUENCY = "24hr";
 
 // Cadence is chosen at delivery-creation time (not enforced in the DB). Watch is
 // limited to the daily-digest cadence; Signal and above can pick per-cycle options.
-function getAllowedFrequencies(plan: string): string[] {
-  return resolvePlan(plan) === "watch"
+function getAllowedFrequencies(plan: string, isAdmin = false): string[] {
+  return resolvePlan(plan, isAdmin) === "watch"
     ? [DAILY_DIGEST_FREQUENCY]
     : Object.keys(FREQUENCY_LABEL);
 }
@@ -1228,12 +1228,12 @@ function ManualDeliveryPanel({
 export default function DestinationsPage() {
   const { account } = useAccount();
   const plan = account.plan;
-  const allowedChannels = getAllowedDestinationChannels(plan);
-  const allowedFrequencies = getAllowedFrequencies(plan);
-  const allowedDeliveryModes = getAllowedDeliveryModes(plan);
-  const destinationLimit = getDestinationLimit(plan);
-  const destinationsEnabled = canConfigurePrivateDestinations(plan);
-  const manualDeliveryEnabled = canRunManualDelivery(plan);
+  const allowedChannels = getAllowedDestinationChannels(plan, account.isAdmin);
+  const allowedFrequencies = getAllowedFrequencies(plan, account.isAdmin);
+  const allowedDeliveryModes = getAllowedDeliveryModes(plan, account.isAdmin);
+  const destinationLimit = getDestinationLimit(plan, account.isAdmin);
+  const destinationsEnabled = canConfigurePrivateDestinations(plan, account.isAdmin);
+  const manualDeliveryEnabled = canRunManualDelivery(plan, account.isAdmin);
 
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [loading, setLoading] = useState(true);

@@ -24,7 +24,6 @@ export interface SceCatalogFilters {
   chains: string[];
   assets: string[];
   tags: string[];
-  purposes: string[];
   statuses: string[];
 }
 

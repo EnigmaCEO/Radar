@@ -62,8 +62,8 @@ type ObservabilityState = {
 
 export default function DashboardPage() {
   const { account } = useAccount();
-  const resolvedPlan = resolvePlan(account.plan);
-  const privateHistoryDays = getPrivateHistoryDays(account.plan);
+  const resolvedPlan = resolvePlan(account.plan, account.isAdmin);
+  const privateHistoryDays = getPrivateHistoryDays(account.plan, account.isAdmin);
   const [alertSummary, setAlertSummary] = useState(EMPTY_DASHBOARD_ALERT_SUMMARY);
   const [observability, setObservability] = useState<ObservabilityState>(null);
   const [loading, setLoading] = useState(true);
@@ -197,7 +197,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {resolvedPlan !== "desk" &&
+      {resolvedPlan !== "desk" && resolvedPlan !== "internal" &&
         (() => {
           const next =
             resolvedPlan === "public_record"
@@ -208,11 +208,11 @@ export default function DashboardPage() {
           const labels: Record<string, [string, string]> = {
             watch: [
               "Upgrade to Watch",
-              "Track up to 5 private objects and receive direct push alerts.",
+              "Monitor one asset lens or up to 5 exact objects with direct alerts and 30-day history.",
             ],
             radar_signal: [
               "Upgrade to Signal",
-              "Correlate private exposure across up to 25 objects with webhook delivery and 90-day history.",
+              "Monitor the full standard catalog with correlation, webhook delivery, and 90-day private history.",
             ],
             desk: [
               "Move to Desk",
@@ -260,10 +260,10 @@ export default function DashboardPage() {
           );
         })()}
 
-      {!allowsPrivateWatchlists(account.plan) && (
+      {!allowsPrivateWatchlists(account.plan, account.isAdmin) && (
         <Card className="border-border/60">
           <CardContent className="pt-6 text-sm text-muted-foreground">
-            Private object monitoring starts on Watch. Public Record and Intel do not include private watchlists.
+            Private monitoring starts on Watch. Public Record and Intel do not include private watchlists.
           </CardContent>
         </Card>
       )}
@@ -338,7 +338,7 @@ export default function DashboardPage() {
               <Eye className="h-5 w-5 text-violet-500" />
               <div>
                 <p className="text-sm font-medium">Manage watchlists</p>
-                <p className="text-xs text-muted-foreground">Organize your private monitored objects</p>
+                <p className="text-xs text-muted-foreground">Choose focused scopes across assets, providers, chains, or the full catalog</p>
               </div>
             </CardContent>
           </Link>
@@ -350,7 +350,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm font-medium">Delivery destinations</p>
                 <p className="text-xs text-muted-foreground">
-                  {canConfigurePrivateDestinations(account.plan)
+                  {canConfigurePrivateDestinations(account.plan, account.isAdmin)
                     ? "Configure Discord, Telegram, or webhook delivery"
                     : "Available on private monitoring plans"}
                 </p>

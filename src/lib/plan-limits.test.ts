@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowsPrivateWatchlists,
   canConfigurePrivateDestinations,
   canRunManualDelivery,
   getAllowedDeliveryModes,
@@ -22,7 +23,7 @@ describe("plan-limits", () => {
   });
 
   it("maps the legacy tier slugs to Intel, Signal, and Desk", () => {
-    expect(resolvePlan("radar_live")).toBe("radar_intel");
+    expect(resolvePlan("radar_live")).toBe("watch");
     expect(resolvePlan("radar_pro")).toBe("radar_signal");
     expect(resolvePlan("radar")).toBe("radar_signal");
     expect(resolvePlan("managed")).toBe("desk");
@@ -32,7 +33,7 @@ describe("plan-limits", () => {
 
   it("enforces the new private object limits", () => {
     expect(getPrivateObjectLimit("watch")).toBe(5);
-    expect(getPrivateObjectLimit("radar_signal")).toBe(25);
+    expect(getPrivateObjectLimit("radar_signal")).toBe(Infinity);
     expect(getPrivateObjectLimit("radar_intel")).toBe(0);
     expect(getPrivateObjectLimit("desk")).toBe(Infinity);
   });
@@ -64,7 +65,7 @@ describe("plan-limits", () => {
   });
 
   it("returns plan-aware private history windows", () => {
-    expect(getPrivateHistoryDays("watch")).toBe(7);
+    expect(getPrivateHistoryDays("watch")).toBe(30);
     expect(getPrivateHistoryDays("radar_signal")).toBe(90);
     expect(getPrivateHistoryDays("radar_intel")).toBe(0);
     expect(getPrivateHistoryDays("desk")).toBeNull();
@@ -86,5 +87,13 @@ describe("plan-limits", () => {
     expect(hasActivePlan({ plan: "radar_signal", status: "pending", stripeSubId: "sub_123" })).toBe(true);
     expect(hasActivePlan({ plan: "watch", status: "current", stripeSubId: "sub_123" })).toBe(true);
     expect(hasActivePlan({ plan: "watch", status: "pending", stripeSubId: null })).toBe(false);
+  });
+
+  it("treats admin accounts as internal for gating helpers", () => {
+    expect(resolvePlan("free", true)).toBe("internal");
+    expect(allowsPrivateWatchlists("free", true)).toBe(true);
+    expect(canConfigurePrivateDestinations("free", true)).toBe(true);
+    expect(canRunManualDelivery("free", true)).toBe(true);
+    expect(hasActivePlan({ plan: "free", status: "canceled", isAdmin: true })).toBe(true);
   });
 });

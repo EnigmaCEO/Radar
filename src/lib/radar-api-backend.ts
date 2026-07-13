@@ -1,4 +1,5 @@
 import type { SessionData } from "@auth0/nextjs-auth0/types";
+import { headers } from "next/headers";
 import type { RadarAccount } from "@/lib/radar-account";
 
 function getRadarApiBaseUrl(): string | null {
@@ -22,13 +23,41 @@ function getUser(session: SessionData) {
   return session.user as { sub: string; name?: string; email?: string };
 }
 
-function buildActorHeaders(session: SessionData): HeadersInit {
+function extractHostname(value: string | null): string | null {
+  if (!value) return null;
+  const first = value.split(",")[0]?.trim();
+  if (!first) return null;
+
+  try {
+    return new URL(first.includes("://") ? first : `http://${first}`).hostname.toLowerCase();
+  } catch {
+    return first.replace(/:\d+$/, "").toLowerCase();
+  }
+}
+
+function isLocalHostname(hostname: string | null): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+}
+
+async function isLocalDevRequest(): Promise<boolean> {
+  try {
+    const requestHeaders = await headers();
+    const forwardedHost = requestHeaders.get("x-forwarded-host");
+    const host = requestHeaders.get("host");
+    return isLocalHostname(extractHostname(forwardedHost) ?? extractHostname(host));
+  } catch {
+    return false;
+  }
+}
+
+function buildActorHeaders(session: SessionData, localDev = false): HeadersInit {
   const user = getUser(session);
   return {
     "x-radar-api-key": getRadarApiSharedSecret(),
     "x-radar-auth0-sub": user.sub,
     ...(user.name ? { "x-radar-auth0-name": user.name } : {}),
     ...(user.email ? { "x-radar-auth0-email": user.email } : {}),
+    ...(localDev ? { "x-radar-local-dev": "true" } : {}),
   };
 }
 
@@ -44,6 +73,7 @@ function authLogContext(session: SessionData) {
 function summarizeAccount(account: Partial<RadarAccount>) {
   return {
     id: account.id ?? null,
+    isAdmin: account.isAdmin ?? false,
     plan: account.plan ?? null,
     status: account.status ?? null,
     hasStripeCustomerId: Boolean(account.stripeCustomerId),
@@ -56,17 +86,19 @@ export async function bootstrapRadarAccount(session: SessionData) {
   if (!baseUrl) {
     throw new Error("RADAR_API_BASE_URL is not configured.");
   }
+  const localDev = await isLocalDevRequest();
 
   console.info("[radar-auth] bootstrap account request", {
     ...authLogContext(session),
     baseUrl,
+    localDev,
   });
 
   const response = await fetch(`${baseUrl}/v1/accounts/bootstrap`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...buildActorHeaders(session),
+      ...buildActorHeaders(session, localDev),
     },
     cache: "no-store",
   });
@@ -76,6 +108,7 @@ export async function bootstrapRadarAccount(session: SessionData) {
     console.error("[radar-auth] bootstrap account failed", {
       ...authLogContext(session),
       baseUrl,
+      localDev,
       status: response.status,
       detail: detail.slice(0, 500),
     });
@@ -86,6 +119,7 @@ export async function bootstrapRadarAccount(session: SessionData) {
   console.info("[radar-auth] bootstrap account success", {
     ...authLogContext(session),
     baseUrl,
+    localDev,
     account: summarizeAccount(account),
   });
   return account;
@@ -111,8 +145,9 @@ export async function forwardRadarApiRequest(
   if (!baseUrl) {
     throw new Error("RADAR_API_BASE_URL is not configured.");
   }
+  const localDev = await isLocalDevRequest();
 
-  const requestHeaders = new Headers(buildActorHeaders(session));
+  const requestHeaders = new Headers(buildActorHeaders(session, localDev));
   if (contentType) {
     requestHeaders.set("Content-Type", contentType);
   }

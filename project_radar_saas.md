@@ -78,8 +78,8 @@
 
 - Public Record is now positioned as the public proof layer, not a free SaaS account tier.
 - Effective plan semantics are:
-  - `watch`: private object monitoring, up to 5 unique watched objects
-  - `radar`: private exposure monitoring, up to 25 unique watched objects with correlation and webhook delivery
+  - `watch`: focused private monitoring with one asset lens or up to 5 exact catalog objects
+  - `radar`: private monitoring across the standard Radar catalog with correlation and webhook delivery
   - `radar_intel`: aggregate infrastructure history and reports, no private watchlists or private alert destinations
   - `desk`: contracted institutional layer with raw history, signed receipts, API access, custom monitors, and review
 - Legacy stored plan identifiers remain compatibility aliases:
@@ -88,14 +88,36 @@
   - `radar_pro` -> `radar`
   - `managed` -> `desk`
 
+## Watchlist Scope Model
+
+- Watchlists are now modeled around explicit coverage scopes instead of raw catalog caps.
+- First-class standard scope types are:
+  - `exact_objects`
+  - `asset_lens`
+  - `chain_lens`
+  - `provider_lens`
+  - `pillar_lens`
+  - `full_catalog`
+- Blank draft watchlists cover zero objects and cannot be saved.
+- Legacy saved watchlists with no scope filters are displayed as `full_catalog` for compatibility, but new full-catalog coverage must be chosen explicitly.
+- Internal operational tags such as `commercial_priority`, `technical_smoke`, `sagitta_dependency`, and `tier:*` are no longer exposed in the customer tag facet.
+
 ## Server-side Enforcement
 
 - Plan restrictions are now enforced server-side in `apps/radar-api`; the client only reflects availability.
-- Watchlists are no longer metered by count. Radar now meters unique covered objects across enabled private watchlists.
-- Broad watchlists without explicit object IDs resolve against the sanitized SCE catalog on the server before acceptance.
-- Watch rejects broad match-all watchlists and rejects any change that would push enabled private coverage beyond 5 unique objects.
-- Radar rejects any change that would push enabled private coverage beyond 25 unique objects.
+- Scope classification is resolved server-side from explicit `scopeType` when present, or inferred from submitted filters when unambiguous.
+- Watch allows:
+  - `exact_objects` up to 5 exact catalog objects
+  - one `asset_lens`, even when it resolves to more than 5 catalog objects
+- Watch rejects:
+  - `chain_lens`
+  - `provider_lens`
+  - `pillar_lens`
+  - `full_catalog`
+  - `custom_monitor`
+- Radar / Signal allows all standard catalog scopes without a 25-object full-catalog cap.
 - Radar Intel rejects private watchlists and private alert destinations.
+- Desk allows all standard scopes; custom monitors remain a contracted / future capability.
 - Destination access is now enforced by channel and delivery mode instead of destination count:
   - Watch: Telegram and Discord only
   - Radar: Telegram, Discord, and webhook

@@ -6,6 +6,7 @@ import { Footer } from "@/components/footer";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { PricingCta, type CheckoutPlan } from "@/components/pricing-cta";
 import { auth0 } from "@/lib/auth0";
+import { PRICING_PLAN_CONTENT, splitPlanPrice } from "@/lib/pricing-content";
 
 export const dynamic = "force-dynamic";
 
@@ -14,80 +15,27 @@ export const metadata: Metadata = {
   description: "Pricing for Radar infrastructure-state monitoring.",
 };
 
-const plans = [
-  {
-    name: "Watch",
-    slug: "watch",
-    priceLabel: "$29/mo",
-    description: "Personal monitoring for selected infrastructure objects.",
-    features: [
-      { text: "Up to 5 watchlist objects", included: true },
-      { text: "Telegram & Discord alerts", included: true },
-      { text: "7-day event history", included: true },
-    ],
-    highlight: false,
-    cta: "Start Watch",
-  },
-  {
-    name: "Intel",
-    slug: "radar_intel",
-    priceLabel: "$99/mo",
-    description: "Aggregate Radar intelligence without private monitoring.",
-    features: [
-      { text: "Provider reliability scores", included: true },
-      { text: "Infrastructure health trends", included: true },
-      { text: "Weekly & monthly reports", included: true },
-      { text: "Deep aggregate history", included: true },
-      { text: "Aggregate CSV exports", included: true },
-    ],
-    highlight: false,
-    cta: "Start Intel",
-  },
-  {
-    name: "Signal",
-    slug: "radar_signal",
-    priceLabel: "$149/mo",
-    description: "Private exposure monitoring with correlation and delivery.",
-    features: [
-      { text: "Up to 25 watchlist objects", included: true },
-      {
-        text: "Correlation & exposure groups",
-        included: true,
-        detail: "Know when related parts of your position break together.",
-      },
-      { text: "Telegram, Discord & webhook alerts", included: true },
-      { text: "90-day event history", included: true },
-    ],
-    highlight: true,
-    cta: "Start Signal",
-    badge: "Core product",
-  },
-  {
-    name: "Desk",
-    slug: "desk",
-    priceLabel: "From $2,500/mo",
-    description: "Institutional state data, review, and integration.",
-    features: [
-      { text: "Full raw event history", included: true },
-      { text: "API access", included: true },
-      { text: "Custom monitoring", included: true },
-      { text: "Support SLA", included: true },
-      { text: "Alert exporting", included: true },
-      { text: "Custom reporting", included: true },
-    ],
-    highlight: false,
-    cta: "Talk to Sagitta Labs",
-    ctaHref: "/request-access",
-  },
-];
+const plans = PRICING_PLAN_CONTENT.map((plan) => ({
+  ...plan,
+  highlight: plan.slug === "radar_signal",
+  cta:
+    plan.slug === "watch"
+      ? "Start Watch"
+      : plan.slug === "radar_intel"
+        ? "Start Intel"
+        : plan.slug === "radar_signal"
+          ? "Start Signal"
+          : "Talk to Sagitta Labs",
+  ctaHref: plan.slug === "desk" ? "/request-access" : undefined,
+}));
 
 const comparison = [
   {
-    feature: "Watchlist objects",
-    watch: "5",
+    feature: "Monitoring scope",
+    watch: "1 asset or 5 exact objects",
     radar_intel: "None",
-    radar: "25",
-    desk: "Contracted",
+    radar: "Full standard catalog",
+    desk: "Full catalog + custom",
   },
   {
     feature: "Correlation",
@@ -98,14 +46,14 @@ const comparison = [
   },
   {
     feature: "Event history",
-    watch: "7 days",
+    watch: "30 days",
     radar_intel: "No",
     radar: "90 days",
     desk: "Contracted raw history",
   },
   {
     feature: "Delivery cadence",
-    watch: "Daily digest",
+    watch: "Push + digest",
     radar_intel: "None",
     radar: "Per-cycle",
     desk: "Per-cycle",
@@ -175,20 +123,6 @@ function Cell({ value }: { value: boolean | string }) {
     );
   }
   return <span className="text-sm">{value}</span>;
-}
-
-function splitPlanPrice(priceLabel: string) {
-  if (priceLabel.endsWith("/mo")) {
-    return {
-      amount: priceLabel.slice(0, -3),
-      suffix: "/mo",
-    };
-  }
-
-  return {
-    amount: priceLabel,
-    suffix: null,
-  };
 }
 
 export default async function PricingPage() {

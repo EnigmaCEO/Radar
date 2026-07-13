@@ -30,7 +30,7 @@ describe("alerts route", () => {
 
   it("preserves lifecycle and object fields from the SCE payload", async () => {
     vi.mocked(auth0.getSession).mockResolvedValue({ user: { sub: "auth0|1" } } as never);
-    vi.mocked(bootstrapRadarAccount).mockResolvedValue({ plan: "radar_signal" } as never);
+    vi.mocked(bootstrapRadarAccount).mockResolvedValue({ plan: "radar_signal", isAdmin: false } as never);
     vi.mocked(fetchSceAlerts).mockResolvedValue([
       {
         id: "alert-1",
@@ -110,7 +110,7 @@ describe("alerts route", () => {
 
   it("rejects private alert history for Public Record accounts", async () => {
     vi.mocked(auth0.getSession).mockResolvedValue({ user: { sub: "auth0|1" } } as never);
-    vi.mocked(bootstrapRadarAccount).mockResolvedValue({ plan: "free" } as never);
+    vi.mocked(bootstrapRadarAccount).mockResolvedValue({ plan: "free", isAdmin: false } as never);
 
     const response = await GET(new NextRequest("http://localhost/api/alerts"));
 
