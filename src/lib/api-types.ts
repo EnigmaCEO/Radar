@@ -2,7 +2,7 @@
 
 export type RadarMonitorType = "oracle" | "bridge" | "governance" | "sce_heartbeat" | "dependency" | "lp";
 export type RadarSeverity = "watch" | "warning" | "critical";
-export type RadarStatus = "active" | "resolved" | "superseded";
+export type RadarStatus = "active" | "resolved" | "superseded" | "disabled";
 export type RadarVisibility = "public" | "private";
 export type RadarAlertProvenance = "sample" | "manual" | "runtime" | "live" | "drill";
 export type RadarWatchlistPlan =

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LocalDateTime } from "@/components/local-time";
 import { fetchSceAlerts } from "@/lib/sce-alerts";
+import { isDisabledAlertStatus } from "@/lib/alert-status";
 import { toPublicRadarAlert } from "@/lib/public-alerts";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +18,14 @@ function severityVariant(severity: string): "critical" | "warning" | "watch" {
   return "watch";
 }
 
-function statusVariant(status: string): "resolved" | "secondary" {
-  return status.toLowerCase() === "resolved" ? "resolved" : "secondary";
+function statusVariant(status: string): "resolved" | "closed" | "secondary" {
+  if (status.toLowerCase() === "resolved") return "resolved";
+  if (isDisabledAlertStatus(status)) return "closed";
+  return "secondary";
+}
+
+function statusLabel(status: string): string {
+  return isDisabledAlertStatus(status) ? "closed" : status;
 }
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
@@ -61,7 +68,7 @@ export default async function PublicAlertsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={severityVariant(alert.severity)}>{alert.severity}</Badge>
                     <Badge variant="secondary">{alert.monitorType}</Badge>
-                    <Badge variant={statusVariant(alert.status)}>{alert.status}</Badge>
+                    <Badge variant={statusVariant(alert.status)}>{statusLabel(alert.status)}</Badge>
                   </div>
                   <CardTitle className="text-lg">{alert.summary}</CardTitle>
                 </CardHeader>

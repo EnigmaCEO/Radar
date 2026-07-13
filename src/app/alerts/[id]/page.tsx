@@ -7,11 +7,14 @@ import {
   getCoverageGapTier,
   isCoverageGapAlert,
 } from "@/lib/alert-classification";
-import { formatDurationBetween } from "@/lib/alert-time";
 import {
   cleanThresholdValueLabel,
   humanizeThresholdRule,
 } from "@/lib/alert-threshold-display";
+import {
+  isDisabledAlertStatus,
+  isResolvedAlertStatus,
+} from "@/lib/alert-status";
 import { auth0 } from "@/lib/auth0";
 import { buildMonitorCtaHref, toPublicRadarAlert } from "@/lib/public-alerts";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LocalDateTime } from "@/components/local-time";
 import { fetchSceAlertById } from "@/lib/sce-alerts";
+import { formatAlertLifecycle, formatDurationBetween } from "@/lib/alert-time";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +33,15 @@ function severityVariant(severity: string): "critical" | "warning" | "watch" {
 }
 
 function statusLabel(status: string, isCoverageGap: boolean): string {
-  if (isCoverageGap && status === "resolved") return "restored";
+  if (isCoverageGap && isResolvedAlertStatus(status)) return "restored";
+  if (isDisabledAlertStatus(status)) return "closed";
   return status;
 }
 
-function statusVariant(status: string): "resolved" | "secondary" {
-  return status.toLowerCase() === "resolved" ? "resolved" : "secondary";
+function statusVariant(status: string): "resolved" | "closed" | "secondary" {
+  if (isResolvedAlertStatus(status)) return "resolved";
+  if (isDisabledAlertStatus(status)) return "closed";
+  return "secondary";
 }
 
 function formatSeconds(value: number): string {
@@ -140,7 +147,7 @@ export default async function PublicAlertDetailPage({
           {isCoverageGap && (
             <Card className="border-border/60">
               <CardHeader>
-              <CardTitle className="text-base">Coverage gap</CardTitle>
+                <CardTitle className="text-base">Coverage gap</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
                 <p>Radar could not observe this object, so object state is currently unknown.</p>
@@ -156,8 +163,13 @@ export default async function PublicAlertDetailPage({
                     <p>Consecutive failed cycles: {publicAlert.consecutiveFailedCycles}</p>
                   )}
                 <p>
-                  Open duration:{" "}
-                  {formatDurationBetween(publicAlert.openedAt ?? publicAlert.createdAt, publicAlert.resolvedAt ?? new Date())}
+                  Lifecycle:{" "}
+                  {formatAlertLifecycle({
+                    status: publicAlert.status,
+                    openedAt: publicAlert.openedAt ?? undefined,
+                    createdAt: publicAlert.createdAt,
+                    resolvedAt: publicAlert.resolvedAt ?? undefined,
+                  })}
                 </p>
                 <p>Object state: {publicAlert.objectState ?? "unknown"}</p>
               </CardContent>

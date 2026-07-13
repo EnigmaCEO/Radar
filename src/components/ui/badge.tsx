@@ -10,7 +10,8 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
     | "watch"
     | "warning"
     | "critical"
-    | "resolved";
+    | "resolved"
+    | "closed";
 }
 
 // Radar Alert Threshold Doctrine v1.0 colour legend:
@@ -24,6 +25,7 @@ const variantClasses: Record<string, string> = {
   warning: "border-transparent bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
   critical: "border-transparent bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
   resolved: "border-transparent bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  closed: "border-transparent bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300",
 };
 
 function Badge({ className, variant = "default", ...props }: BadgeProps) {

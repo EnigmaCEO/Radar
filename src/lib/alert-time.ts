@@ -1,4 +1,5 @@
 import type { RadarAlert } from "./api-types";
+import { isClosedAlertStatus, isResolvedAlertStatus } from "./alert-status";
 
 export function formatDurationBetween(start: string, end: string | Date = new Date()): string {
   const startTime = new Date(start).getTime();
@@ -21,8 +22,14 @@ export function formatDurationBetween(start: string, end: string | Date = new Da
 
 export function formatAlertLifecycle(alert: Pick<RadarAlert, "status" | "openedAt" | "createdAt" | "resolvedAt">): string {
   const openedAt = alert.openedAt ?? alert.createdAt;
-  if (alert.status === "resolved" && alert.resolvedAt) {
+  if (isResolvedAlertStatus(alert.status) && alert.resolvedAt) {
     return `resolved in ${formatDurationBetween(openedAt, alert.resolvedAt)}`;
+  }
+  if (isClosedAlertStatus(alert.status)) {
+    if (alert.resolvedAt) {
+      return `closed after ${formatDurationBetween(openedAt, alert.resolvedAt)}`;
+    }
+    return "closed";
   }
   return `open for ${formatDurationBetween(openedAt)}`;
 }

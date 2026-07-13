@@ -1,5 +1,9 @@
 import type { RadarAlert, RadarStatus } from "./api-types";
 import { isCoverageGapAlert } from "./alert-classification";
+import {
+  isDisabledAlertStatus,
+  isSupersededAlertStatus,
+} from "./alert-status";
 import { formatDurationBetween } from "./alert-time";
 
 export interface CoverageGapGroup {
@@ -100,15 +104,19 @@ function foldReciprocalRoutes(routes: string[]): string[] {
 }
 
 function statusForAlerts(alerts: RadarAlert[]): RadarStatus {
-  return alerts.some((alert) => alert.status === "active") ? "active" : "resolved";
+  if (alerts.some((alert) => alert.status === "active")) return "active";
+  if (alerts.some((alert) => isDisabledAlertStatus(alert.status))) return "disabled";
+  if (alerts.some((alert) => isSupersededAlertStatus(alert.status))) return "superseded";
+  return "resolved";
 }
 
 function buildGroupSummary(alerts: RadarAlert[]): string {
   const firstOpened = alerts[0];
   if (!firstOpened) return "";
 
-  const allResolved = alerts.every((alert) => Boolean(resolvedAtValue(alert)));
-  if (allResolved) {
+  const groupStatus = statusForAlerts(alerts);
+  const allClosedWithEnd = alerts.every((alert) => Boolean(resolvedAtValue(alert)));
+  if (groupStatus === "resolved" && allClosedWithEnd) {
     const longestDurationMs = Math.max(
       ...alerts.map((alert) => {
         const opened = new Date(openedAtValue(alert)).getTime();
@@ -118,6 +126,20 @@ function buildGroupSummary(alerts: RadarAlert[]): string {
     );
     const end = new Date(new Date(openedAtValue(firstOpened)).getTime() + longestDurationMs);
     return `all restored within ${formatDurationBetween(openedAtValue(firstOpened), end)}`;
+  }
+  if (groupStatus !== "active") {
+    if (allClosedWithEnd) {
+      const longestDurationMs = Math.max(
+        ...alerts.map((alert) => {
+          const opened = new Date(openedAtValue(alert)).getTime();
+          const resolved = new Date(resolvedAtValue(alert) ?? openedAtValue(alert)).getTime();
+          return Math.max(0, resolved - opened);
+        }),
+      );
+      const end = new Date(new Date(openedAtValue(firstOpened)).getTime() + longestDurationMs);
+      return `closed after ${formatDurationBetween(openedAtValue(firstOpened), end)}`;
+    }
+    return "closed";
   }
 
   return `open for ${formatDurationBetween(openedAtValue(firstOpened))}`;

@@ -11,6 +11,11 @@ import {
   humanizeReasonCode,
   isCoverageGapAlert,
 } from "@/lib/alert-classification";
+import {
+  coverageGapHeadlineLabel,
+  coverageGapStatusLabel,
+  isDisabledAlertStatus,
+} from "@/lib/alert-status";
 import { formatThresholdValueWithRule, humanizeThresholdRule } from "@/lib/alert-threshold-display";
 import { correlateAlerts, type CorrelatedAlertGroup, type CorrelatedAlertListItem } from "@/lib/alert-correlation";
 import { groupCoverageGapAlerts, type CoverageGapGroup } from "@/lib/coverage-gap-grouping";
@@ -45,12 +50,14 @@ function MonitorTypeBadge({ type }: { type: RadarMonitorType }) {
   );
 }
 
+const CLOSED_STATUS_CLASS = "border border-slate-500/20 bg-slate-500/10 text-slate-300";
+
 function StatusBadge({ status }: { status: RadarStatus }) {
   const className =
     status === "resolved"
       ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-      : status === "superseded"
-        ? "border border-slate-500/20 bg-slate-500/10 text-slate-300"
+      : status === "superseded" || status === "disabled"
+        ? CLOSED_STATUS_CLASS
         : "border border-primary/20 bg-primary/10 text-primary";
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${className}`}>{status}</span>
@@ -58,12 +65,12 @@ function StatusBadge({ status }: { status: RadarStatus }) {
 }
 
 function CoverageStatusBadge({ status }: { status: RadarStatus }) {
-  const label = status === "resolved" ? "restored" : status === "superseded" ? "superseded" : "active";
+  const label = coverageGapStatusLabel(status);
   const className =
     status === "resolved"
       ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-      : status === "superseded"
-        ? "border border-slate-500/20 bg-slate-500/10 text-slate-300"
+      : status === "superseded" || isDisabledAlertStatus(status)
+        ? CLOSED_STATUS_CLASS
         : "border border-primary/20 bg-primary/10 text-primary";
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${className}`}>{label}</span>
@@ -214,19 +221,12 @@ function GroupCard({ group }: { group: CorrelatedAlertGroup }) {
     group.alerts[group.alerts.length - 1]?.openedAt ??
     group.alerts[group.alerts.length - 1]?.createdAt ??
     group.openedAt;
-  const lifecycle =
-    group.status === "resolved" && group.resolvedAt
-      ? `resolved in ${formatAlertLifecycle({
-          status: "resolved",
-          createdAt: group.openedAt,
-          openedAt: group.openedAt,
-          resolvedAt: group.resolvedAt,
-        }).replace(/^resolved in /, "")}`
-      : `open for ${formatAlertLifecycle({
-          status: "active",
-          createdAt: group.openedAt,
-          openedAt: group.openedAt,
-        }).replace(/^open for /, "")}`;
+  const lifecycle = formatAlertLifecycle({
+    status: group.status,
+    createdAt: group.openedAt,
+    openedAt: group.openedAt,
+    resolvedAt: group.resolvedAt,
+  });
 
   return (
     <Card className={FINDING_CARD_CLASSES[group.severity]}>
@@ -392,7 +392,9 @@ function CoverageGapCard({ alert }: { alert: RadarAlert }) {
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-medium">Unresolved - {objectName(alert)}</p>
+                <p className="text-sm font-medium">
+                  {coverageGapHeadlineLabel(alert.status)} - {objectName(alert)}
+                </p>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{coverageLead(alert)}</p>
               <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -624,6 +626,7 @@ export default function AlertsPage() {
           <option value="active">Active</option>
           <option value="resolved">Resolved</option>
           <option value="superseded">Superseded</option>
+          <option value="disabled">Disabled</option>
         </Select>
 
         <Select
@@ -692,7 +695,7 @@ export default function AlertsPage() {
             {coverageGroups.length === 0 ? (
               <Card className="border-border/60">
                 <CardContent className="py-6 text-sm text-muted-foreground">
-                  No active coverage gaps match the current filters.
+                  No coverage gaps match the current filters.
                 </CardContent>
               </Card>
             ) : (

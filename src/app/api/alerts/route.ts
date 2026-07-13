@@ -13,7 +13,7 @@ function toSeverity(value: string): RadarSeverity {
 }
 
 function toStatus(value: string): RadarStatus {
-  if (value === "active" || value === "resolved" || value === "superseded") {
+  if (value === "active" || value === "resolved" || value === "superseded" || value === "disabled") {
     return value;
   }
   return "active";

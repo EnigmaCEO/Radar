@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowRight, Bell, Eye } from "lucide-react";
 import { useAccount } from "@/lib/account-context";
 import { getRadarCatalog, listAlerts } from "@/lib/api";
 import { isCoverageGapAlert } from "@/lib/alert-classification";
+import { coverageGapStatusLabel, isDisabledAlertStatus } from "@/lib/alert-status";
 import {
   allowsPrivateWatchlists,
   canConfigurePrivateDestinations,
@@ -18,10 +19,13 @@ import {
   loadDashboardAlertSummary,
 } from "@/lib/alert-feed";
 import { formatAlertLifecycle } from "@/lib/alert-time";
+import type { RadarStatus } from "@/lib/api-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LocalDateTime } from "@/components/local-time";
+
+const CLOSED_STATUS_CLASS = "border border-slate-500/20 bg-slate-500/10 text-slate-300";
 
 function SeverityBadge({ severity }: { severity: string }) {
   const variant =
@@ -29,25 +33,25 @@ function SeverityBadge({ severity }: { severity: string }) {
   return <Badge variant={variant as "critical" | "warning" | "watch"}>{severity}</Badge>;
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: RadarStatus }) {
   const className =
     status === "resolved"
       ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-      : status === "superseded"
-        ? "border border-slate-500/20 bg-slate-500/10 text-slate-300"
+      : status === "superseded" || isDisabledAlertStatus(status)
+        ? CLOSED_STATUS_CLASS
         : "border border-primary/20 bg-primary/10 text-primary";
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${className}`}>{status}</span>
   );
 }
 
-function CoverageStatusBadge({ status }: { status: string }) {
-  const label = status === "resolved" ? "restored" : status === "superseded" ? "superseded" : "active";
+function CoverageStatusBadge({ status }: { status: RadarStatus }) {
+  const label = coverageGapStatusLabel(status);
   const className =
     status === "resolved"
       ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-      : status === "superseded"
-        ? "border border-slate-500/20 bg-slate-500/10 text-slate-300"
+      : status === "superseded" || isDisabledAlertStatus(status)
+        ? CLOSED_STATUS_CLASS
         : "border border-primary/20 bg-primary/10 text-primary";
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${className}`}>{label}</span>
@@ -274,7 +278,7 @@ export default function DashboardPage() {
             <h2 className="font-semibold">Recent alert activity</h2>
             {recentActivity.length > 0 && (
               <p className="mt-1 text-xs text-muted-foreground">
-                Showing the latest openings and recoveries across your visible history
+                Showing the latest openings and closures across your visible history
               </p>
             )}
           </div>
