@@ -16,6 +16,7 @@ import {
   coverageGapStatusLabel,
   isDisabledAlertStatus,
 } from "@/lib/alert-status";
+import { extractAlertEvidenceDetails } from "@/lib/alert-evidence-display";
 import { formatThresholdValueWithRule, humanizeThresholdRule } from "@/lib/alert-threshold-display";
 import { correlateAlerts, type CorrelatedAlertGroup, type CorrelatedAlertListItem } from "@/lib/alert-correlation";
 import { groupCoverageGapAlerts, type CoverageGapGroup } from "@/lib/coverage-gap-grouping";
@@ -168,6 +169,23 @@ function humanizeContractState(value: string | undefined): string | null {
   return value.replace(/_/g, " ").trim();
 }
 
+function mergedEvidenceDetails(alert: RadarAlert) {
+  const parsed = extractAlertEvidenceDetails(alert.evidenceExplanation);
+  return {
+    thresholdSourceLabel: alert.thresholdSourceLabel?.trim() || parsed.thresholdSourceLabel,
+    expectedHeartbeat:
+      formatSecondsLabel(alert.declaredHeartbeatSeconds) ?? parsed.expectedHeartbeat,
+    warningThreshold: parsed.warningThreshold,
+    criticalThreshold: parsed.criticalThreshold,
+    evidenceState:
+      humanizeContractState(alert.evidenceState) ??
+      humanizeContractState(parsed.evidenceState ?? undefined),
+    publicVerificationState:
+      humanizeContractState(alert.publicVerificationState) ??
+      humanizeContractState(parsed.publicVerificationState ?? undefined),
+  };
+}
+
 function formatSecondsLabel(value: number | undefined): string | null {
   if (value === undefined || !Number.isFinite(value) || value < 0) return null;
   if (value < 60) return `${value}s`;
@@ -183,27 +201,41 @@ function formatSecondsLabel(value: number | undefined): string | null {
 }
 
 function verificationSummaryLine(alert: RadarAlert): Array<string> {
+  const details = mergedEvidenceDetails(alert);
   const parts: string[] = [];
-  const publicVerificationState = humanizeContractState(alert.publicVerificationState);
-  const evidenceState = humanizeContractState(alert.evidenceState);
-  const thresholdSourceLabel = alert.thresholdSourceLabel?.trim();
 
-  if (publicVerificationState) parts.push(`Public verification: ${publicVerificationState}`);
-  if (evidenceState) parts.push(`Evidence: ${evidenceState}`);
-  if (thresholdSourceLabel) parts.push(`Threshold source: ${thresholdSourceLabel}`);
+  if (details.publicVerificationState) {
+    parts.push(`Public verification: ${details.publicVerificationState}`);
+  }
+  if (details.evidenceState) parts.push(`Evidence: ${details.evidenceState}`);
+  if (details.thresholdSourceLabel) {
+    parts.push(`Threshold source: ${details.thresholdSourceLabel}`);
+  }
 
   return parts;
 }
 
 function thresholdContractLine(alert: RadarAlert): Array<string> {
+  const details = mergedEvidenceDetails(alert);
   const parts: string[] = [];
-  const declaredHeartbeat = formatSecondsLabel(alert.declaredHeartbeatSeconds);
+  const declaredHeartbeat = details.expectedHeartbeat;
   const appliedThreshold = formatSecondsLabel(alert.appliedThresholdSeconds);
   const appliedThresholdKind =
     humanizeThresholdRule(alert.appliedThresholdKind) ??
     humanizeContractState(alert.appliedThresholdKind);
+  const displayedRule =
+    humanizeThresholdRule(alert.thresholdName) ??
+    humanizeThresholdRule(alert.appliedThresholdKind) ??
+    "";
+  const displayedRuleLower = displayedRule.toLowerCase();
 
   if (declaredHeartbeat) parts.push(`Declared heartbeat: ${declaredHeartbeat}`);
+  if (details.warningThreshold && !displayedRuleLower.includes("warning")) {
+    parts.push(`Warning threshold: ${details.warningThreshold}`);
+  }
+  if (details.criticalThreshold && !displayedRuleLower.includes("critical")) {
+    parts.push(`Critical threshold: ${details.criticalThreshold}`);
+  }
   if (appliedThreshold) {
     parts.push(
       appliedThresholdKind

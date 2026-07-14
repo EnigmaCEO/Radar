@@ -15,6 +15,7 @@ import {
   isDisabledAlertStatus,
   isResolvedAlertStatus,
 } from "@/lib/alert-status";
+import { extractAlertEvidenceDetails } from "@/lib/alert-evidence-display";
 import { auth0 } from "@/lib/auth0";
 import { buildMonitorCtaHref, toPublicRadarAlert } from "@/lib/public-alerts";
 import { Badge } from "@/components/ui/badge";
@@ -56,10 +57,14 @@ function formatSeconds(value: number): string {
 
 function detailRows(alert: ReturnType<typeof toPublicRadarAlert>) {
   if (!alert) return [];
+  const evidenceDetails = extractAlertEvidenceDetails(alert.evidenceExplanation);
   const thresholdRule = humanizeThresholdRule(alert.thresholdName) ?? alert.thresholdName ?? null;
   const thresholdValue = cleanThresholdValueLabel(alert.thresholdValueLabel) ?? null;
   const expectedHeartbeat =
-    alert.declaredHeartbeatSeconds !== null ? formatSeconds(alert.declaredHeartbeatSeconds) : null;
+    alert.declaredHeartbeatSeconds !== null
+      ? formatSeconds(alert.declaredHeartbeatSeconds)
+      : evidenceDetails.expectedHeartbeat;
+  const thresholdSourceLabel = alert.thresholdSourceLabel ?? evidenceDetails.thresholdSourceLabel;
 
   return [
     ["Monitor type", alert.monitorType],
@@ -71,8 +76,11 @@ function detailRows(alert: ReturnType<typeof toPublicRadarAlert>) {
     ["Pool", alert.poolName ?? null],
     ["Threshold rule", thresholdRule],
     ["Expected heartbeat", expectedHeartbeat],
+    ["Warning threshold", evidenceDetails.warningThreshold],
+    ["Critical threshold", evidenceDetails.criticalThreshold],
     ["Observed value", alert.observedValueLabel ?? null],
     ["Applied threshold", thresholdValue],
+    ["Threshold source", thresholdSourceLabel],
   ].filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0);
 }
 
@@ -89,21 +97,39 @@ export default async function PublicAlertDetailPage({
   }
 
   const publicAlert = toPublicRadarAlert(alert);
+  const evidenceDetails = extractAlertEvidenceDetails(publicAlert.evidenceExplanation);
   const session = await auth0.getSession();
   const rows = detailRows(publicAlert);
   const verificationState = (
     publicAlert.publicVerificationState ??
+    evidenceDetails.publicVerificationState ??
     publicAlert.evidenceState ??
+    evidenceDetails.evidenceState ??
     ""
   ).toLowerCase();
   const isVerified = verificationState === "verified";
   const hasEvidenceReceipt = Boolean(
     publicAlert.publicVerificationState ||
+      evidenceDetails.publicVerificationState ||
       publicAlert.declaredHeartbeatSeconds !== null ||
       publicAlert.appliedThresholdSeconds !== null ||
       publicAlert.lastSuccessfulObservationAt ||
-      publicAlert.thresholdSourceLabel,
+      publicAlert.thresholdSourceLabel ||
+      evidenceDetails.thresholdSourceLabel ||
+      evidenceDetails.expectedHeartbeat ||
+      evidenceDetails.warningThreshold ||
+      evidenceDetails.criticalThreshold ||
+      publicAlert.evidenceState ||
+      evidenceDetails.evidenceState,
   );
+  const publicVerificationLabel =
+    publicAlert.publicVerificationState ?? evidenceDetails.publicVerificationState;
+  const thresholdSourceLabel =
+    publicAlert.thresholdSourceLabel ?? evidenceDetails.thresholdSourceLabel;
+  const expectedHeartbeat =
+    publicAlert.declaredHeartbeatSeconds !== null
+      ? formatSeconds(publicAlert.declaredHeartbeatSeconds)
+      : evidenceDetails.expectedHeartbeat;
   const isCoverageGap = isCoverageGapAlert({
     signalClass: alert.signalClass,
     reasonCode: alert.reasonCode,
@@ -246,13 +272,13 @@ export default async function PublicAlertDetailPage({
                 <CardTitle className="text-base">Evidence receipt</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {publicAlert.publicVerificationState && (
+                {publicVerificationLabel && (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     {isVerified ? (
                       <Badge variant="resolved">verified</Badge>
                     ) : (
                       <Badge variant="secondary">
-                        {publicAlert.publicVerificationState.replace(/_/g, " ")}
+                        {publicVerificationLabel.replace(/_/g, " ")}
                       </Badge>
                     )}
                     <p className="text-xs text-muted-foreground">
@@ -262,10 +288,10 @@ export default async function PublicAlertDetailPage({
                   </div>
                 )}
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {publicAlert.declaredHeartbeatSeconds !== null && (
+                  {expectedHeartbeat && (
                     <EvidenceRow
                       label="Declared heartbeat (official feed metadata)"
-                      value={formatSeconds(publicAlert.declaredHeartbeatSeconds)}
+                      value={expectedHeartbeat}
                     />
                   )}
                   {publicAlert.appliedThresholdSeconds !== null && (
@@ -277,14 +303,32 @@ export default async function PublicAlertDetailPage({
                       value={formatSeconds(publicAlert.appliedThresholdSeconds)}
                     />
                   )}
+                  {evidenceDetails.warningThreshold && (
+                    <EvidenceRow
+                      label="Warning threshold"
+                      value={evidenceDetails.warningThreshold}
+                    />
+                  )}
+                  {evidenceDetails.criticalThreshold && (
+                    <EvidenceRow
+                      label="Critical threshold"
+                      value={evidenceDetails.criticalThreshold}
+                    />
+                  )}
                   {publicAlert.lastSuccessfulObservationAt && (
                     <EvidenceRow
                       label="Observed age"
                       value={`${formatDurationBetween(publicAlert.lastSuccessfulObservationAt)} ago`}
                     />
                   )}
-                  {publicAlert.thresholdSourceLabel && (
-                    <EvidenceRow label="Threshold source" value={publicAlert.thresholdSourceLabel} />
+                  {thresholdSourceLabel && (
+                    <EvidenceRow label="Threshold source" value={thresholdSourceLabel} />
+                  )}
+                  {(publicAlert.evidenceState ?? evidenceDetails.evidenceState) && (
+                    <EvidenceRow
+                      label="Evidence state"
+                      value={(publicAlert.evidenceState ?? evidenceDetails.evidenceState ?? "").replace(/_/g, " ")}
+                    />
                   )}
                 </div>
                 {publicAlert.lastSuccessfulObservationAt && (
