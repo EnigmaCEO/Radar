@@ -1,12 +1,14 @@
 import type {
   AccessRequest,
   RadarAlert,
+  RadarAlertPage,
   RadarClient,
   RadarClientEntitlementSummary,
   RadarDeliveryDestination,
   RadarWatchlist,
   SaasMeResponse,
 } from "./api-types";
+import type { DashboardBootstrapPayload } from "./dashboard-bootstrap-types";
 import type { SceCatalogResponse } from "./sce-catalog-types";
 import type { SceThresholdResponse } from "./sce-threshold-types";
 import { stripTrailingSlash } from "./utils";
@@ -95,19 +97,56 @@ export async function requestAccess(payload: {
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
-export async function listAlerts(params?: {
+export interface ListAlertsParams {
   status?: string;
   severity?: string;
   monitorType?: string;
   limit?: number;
-}): Promise<RadarAlert[]> {
+  historyMode?: "snapshot" | "ledger";
+  window?: "24h" | "7d" | "30d" | "90d" | "all";
+}
+
+function normalizeAlertPage(payload: RadarAlert[] | RadarAlertPage): RadarAlertPage {
+  if (Array.isArray(payload)) {
+    return {
+      alerts: payload,
+      count: payload.length,
+      pageCount: payload.length,
+    };
+  }
+
+  const alerts = Array.isArray(payload.alerts) ? payload.alerts : [];
+  const count =
+    typeof payload.count === "number" && Number.isFinite(payload.count)
+      ? Math.max(0, Math.trunc(payload.count))
+      : alerts.length;
+  const pageCount =
+    typeof payload.pageCount === "number" && Number.isFinite(payload.pageCount)
+      ? Math.max(0, Math.trunc(payload.pageCount))
+      : alerts.length;
+
+  return { alerts, count, pageCount };
+}
+
+export async function listAlertPage(params?: ListAlertsParams): Promise<RadarAlertPage> {
   const query = new URLSearchParams();
   if (params?.status) query.set("status", params.status);
   if (params?.severity) query.set("severity", params.severity);
   if (params?.monitorType) query.set("monitor_type", params.monitorType);
   if (params?.limit) query.set("limit", String(params.limit));
+  if (params?.historyMode) query.set("history_mode", params.historyMode);
+  if (params?.window) query.set("window", params.window);
   const qs = query.toString();
-  return requestSameOrigin<RadarAlert[]>(`/api/alerts${qs ? `?${qs}` : ""}`);
+  const payload = await requestSameOrigin<RadarAlert[] | RadarAlertPage>(
+    `/api/alerts${qs ? `?${qs}` : ""}`,
+    { cache: "no-store" },
+  );
+  return normalizeAlertPage(payload);
+}
+
+export async function listAlerts(params?: ListAlertsParams): Promise<RadarAlert[]> {
+  const page = await listAlertPage(params);
+  return page.alerts;
 }
 
 export async function getAlert(id: string): Promise<RadarAlert> {
@@ -116,6 +155,12 @@ export async function getAlert(id: string): Promise<RadarAlert> {
 
 export async function getRadarCatalog(): Promise<SceCatalogResponse> {
   return requestSameOrigin<SceCatalogResponse>("/api/radar/catalog");
+}
+
+export async function getDashboardBootstrap(): Promise<DashboardBootstrapPayload> {
+  return requestSameOrigin<DashboardBootstrapPayload>("/api/dashboard/bootstrap", {
+    cache: "no-store",
+  });
 }
 
 export async function getRadarThresholds(): Promise<SceThresholdResponse> {

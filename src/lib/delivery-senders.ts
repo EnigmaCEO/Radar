@@ -276,6 +276,30 @@ function announcementThresholdValue(alert: AnnouncementFeedAlert): string {
   return base;
 }
 
+function formatUsdCompact(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+// Real dollar pool depth (Moralis TVL) for LP alerts: before -> after when a
+// prior snapshot exists, else current only. Additive context alongside the
+// on-chain in-range liquidity (L) drop that actually triggers the alert.
+function announcementPoolTvlValue(alert: AnnouncementFeedAlert): string | null {
+  const after = alert.lpTotalLiquidityUsd;
+  if (typeof after !== "number" || !Number.isFinite(after)) return null;
+  const source = firstString(alert.lpTvlSource);
+  const suffix = source ? ` (${titleCase(source)})` : "";
+  const before = alert.lpPriorTotalLiquidityUsd;
+  if (typeof before === "number" && Number.isFinite(before)) {
+    return `${formatUsdCompact(before)} → ${formatUsdCompact(after)}${suffix}`;
+  }
+  return `${formatUsdCompact(after)}${suffix}`;
+}
+
 function fallbackAnnouncementExplanation(alert: AnnouncementFeedAlert): string {
   switch (alert.reasonCode.trim().toUpperCase()) {
     case "ORACLE_STALE":
@@ -343,6 +367,7 @@ function buildAnnouncementText(alert: AnnouncementFeedAlert): string {
     announcementObservedValue(alert);
   const thresholdValue =
     announcementThresholdValue(alert);
+  const poolTvlValue = announcementPoolTvlValue(alert);
   const detailsUrl = buildAnnouncementDetailsUrl(alert.id);
 
   return [
@@ -354,6 +379,7 @@ function buildAnnouncementText(alert: AnnouncementFeedAlert): string {
     "",
     `${observedLabel}: ${observedValue}`,
     `${thresholdLabel}: ${thresholdValue}`,
+    ...(poolTvlValue ? [`Pool TVL: ${poolTvlValue}`] : []),
     "",
     `Status: ${firstString(alert.radarStatus) ?? fallbackAnnouncementStatus(alert)}`,
     `Details: ${detailsUrl}`,
@@ -367,6 +393,7 @@ function buildAnnouncementDiscordEmbed(
 ): Record<string, unknown> {
   const { hashtags, cashtags } = buildAnnouncementTags(alert);
   const { observedLabel, thresholdLabel } = announcementMetricLabels(alert);
+  const poolTvlValue = announcementPoolTvlValue(alert);
   return {
     title: announcementBanner(alert.severity),
     description: `${buildAnnouncementTitle(alert)}\n\n${buildAnnouncementExplanation(alert)}`,
@@ -382,6 +409,9 @@ function buildAnnouncementDiscordEmbed(
         value: announcementThresholdValue(alert),
         inline: true,
       },
+      ...(poolTvlValue
+        ? [{ name: "Pool TVL", value: poolTvlValue, inline: true }]
+        : []),
       {
         name: "Status",
         value: firstString(alert.radarStatus) ?? fallbackAnnouncementStatus(alert),
@@ -443,6 +473,12 @@ function buildAnnouncementWebhookPayload(
       label: thresholdLabel,
       value: announcementThresholdValue(alert),
       thresholdName: alert.thresholdName ?? null,
+    },
+    poolDepth: {
+      totalLiquidityUsd: alert.lpTotalLiquidityUsd ?? null,
+      priorTotalLiquidityUsd: alert.lpPriorTotalLiquidityUsd ?? null,
+      liquidityUsdDropPct: alert.lpLiquidityUsdDropPct ?? null,
+      source: firstString(alert.lpTvlSource),
     },
     statusText: firstString(alert.radarStatus) ?? fallbackAnnouncementStatus(alert),
     detailsUrl: buildAnnouncementDetailsUrl(alert.id),

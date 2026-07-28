@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
+import { buildAdminViewPlanHeaders } from "@/lib/admin-plan-override-server";
 import {
   forwardRadarApiRequest,
   toProxyResponse,
@@ -17,6 +18,7 @@ export async function POST(
   const response = await forwardRadarApiRequest(`/v1/destinations/${id}/test`, {
     method: "POST",
     session,
+    headers: buildAdminViewPlanHeaders(request),
   });
   return toProxyResponse(response);
 }

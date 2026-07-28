@@ -57,6 +57,7 @@ export interface RadarAlert {
   visibility: RadarVisibility;
   provenance: RadarAlertProvenance;
   signalClass?: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
   oracle?: string;
@@ -93,6 +94,12 @@ export interface RadarAlert {
   evidenceUrl?: string;
   openedAt?: string;
   resolvedAt?: string;
+}
+
+export interface RadarAlertPage {
+  alerts: RadarAlert[];
+  count: number;
+  pageCount: number;
 }
 
 export interface RadarObservabilitySummary {

@@ -1,25 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Bell, Eye } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, Bell, Eye, FileText, ShieldCheck } from "lucide-react";
 import { useAccount } from "@/lib/account-context";
-import { getRadarCatalog, listAlerts } from "@/lib/api";
 import { isCoverageGapAlert } from "@/lib/alert-classification";
 import { coverageGapStatusLabel, isDisabledAlertStatus } from "@/lib/alert-status";
 import {
   allowsPrivateWatchlists,
   canConfigurePrivateDestinations,
+  getDashboardAlertHistoryDays,
   getPlanLabel,
-  getPrivateHistoryDays,
   resolvePlan,
 } from "@/lib/plan-limits";
 import {
-  EMPTY_DASHBOARD_ALERT_SUMMARY,
-  loadDashboardAlertSummary,
+  collapseAlertsToLatestState,
+  summarizeDashboardAlerts,
 } from "@/lib/alert-feed";
+import { buildProviderReliabilityRowsWithOptions } from "@/lib/intel-analytics";
+import { filterLedgerAlertsByWindow } from "@/lib/radar-ledger";
+import { useRadarLedgerHistory } from "@/lib/radar-ledger-context";
 import { formatAlertLifecycle } from "@/lib/alert-time";
-import type { RadarStatus } from "@/lib/api-types";
+import type { RadarAlert, RadarStatus } from "@/lib/api-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,70 +63,66 @@ type ObservabilityState = {
   totalObjects: number;
   observableObjects: number;
   activeCoverageGaps: number;
-} | null;
+};
+
+type ProviderHealthState = {
+  trackedProviders: number;
+  providersWithActiveIssues: number;
+  criticalProviders: number;
+  degradedProviders: number;
+  healthyProviders: number;
+};
+
+function summarizeIntelProviderHealth(alerts: RadarAlert[]): ProviderHealthState {
+  const rows = buildProviderReliabilityRowsWithOptions(
+    filterLedgerAlertsByWindow(alerts, "30d"),
+    { scoringWindowLabel: "30d history window" },
+  );
+  const criticalProviders = rows.filter((row) => row.currentCondition === "Critical").length;
+  const degradedProviders = rows.filter((row) => row.currentCondition === "Degraded").length;
+  const healthyProviders = rows.filter(
+    (row) => row.currentCondition === "Stable" || row.currentCondition === "No active issues",
+  ).length;
+
+  return {
+    trackedProviders: rows.length,
+    providersWithActiveIssues: criticalProviders + degradedProviders,
+    criticalProviders,
+    degradedProviders,
+    healthyProviders,
+  };
+}
 
 export default function DashboardPage() {
   const { account } = useAccount();
-  const resolvedPlan = resolvePlan(account.plan, account.isAdmin);
-  const privateHistoryDays = getPrivateHistoryDays(account.plan, account.isAdmin);
-  const [alertSummary, setAlertSummary] = useState(EMPTY_DASHBOARD_ALERT_SUMMARY);
-  const [observability, setObservability] = useState<ObservabilityState>(null);
-  const [loading, setLoading] = useState(true);
+  const { snapshotPage, ledgerPage, catalog, loading, loaded, error } = useRadarLedgerHistory();
+  const resolvedPlan = resolvePlan(account.plan, account.isAdmin, account.adminViewPlan);
+  const dashboardHistoryDays = getDashboardAlertHistoryDays(
+    account.plan,
+    account.isAdmin,
+    account.adminViewPlan,
+  );
+  const isIntelView = resolvedPlan === "radar_intel";
+  const overviewAlerts = isIntelView
+    ? collapseAlertsToLatestState(ledgerPage.alerts)
+    : snapshotPage.alerts;
+  const activeAlerts = overviewAlerts.filter((alert) => alert.status === "active");
+  const alertSummary = summarizeDashboardAlerts(activeAlerts, overviewAlerts);
+  const observability: ObservabilityState = {
+    totalObjects: catalog.objects.length,
+    observableObjects: Math.max(
+      0,
+      catalog.objects.length - activeAlerts.filter((alert) => isCoverageGapAlert(alert)).length,
+    ),
+    activeCoverageGaps: activeAlerts.filter((alert) => isCoverageGapAlert(alert)).length,
+  };
+  const providerHealth = isIntelView
+    ? summarizeIntelProviderHealth(ledgerPage.alerts)
+    : null;
+  const { criticalCount, recentActivity, totalActiveAlerts, warningCount, watchCount } = alertSummary;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    void Promise.allSettled([
-      loadDashboardAlertSummary(listAlerts),
-      getRadarCatalog(),
-      listAlerts({
-        status: "active",
-        limit: 200,
-      }),
-    ])
-      .then(([summaryResult, catalogResult, activeAlertsResult]) => {
-        if (cancelled) return;
-
-        if (summaryResult.status === "fulfilled") {
-          setAlertSummary(summaryResult.value);
-        }
-
-        if (
-          catalogResult.status === "fulfilled" &&
-          activeAlertsResult.status === "fulfilled"
-        ) {
-          const activeCoverageGaps = activeAlertsResult.value.filter((alert) =>
-            isCoverageGapAlert(alert),
-          ).length;
-          setObservability({
-            totalObjects: catalogResult.value.objects.length,
-            observableObjects: Math.max(
-              0,
-              catalogResult.value.objects.length - activeCoverageGaps,
-            ),
-            activeCoverageGaps,
-          });
-        } else {
-          setObservability(null);
-        }
-      })
-      .catch((error) => {
-        console.error(error);
-        if (!cancelled) setObservability(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const { criticalCount, recentActivity, totalActiveAlerts, warningCount, watchCount } =
-    alertSummary;
-
-  if (loading) return <div className="text-sm text-muted-foreground">Loading...</div>;
+  if (loading || !loaded) return <div className="text-sm text-muted-foreground">Loading...</div>;
+  if (error) return <div className="text-sm text-muted-foreground">{error}</div>;
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -133,7 +130,7 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold tracking-tight">Overview</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {account.name || "Your account"} -{" "}
-          <span className="font-medium">{getPlanLabel(account.plan)}</span>
+          <span className="font-medium">{getPlanLabel(account.plan, account.isAdmin, account.adminViewPlan)}</span>
         </p>
       </div>
 
@@ -157,20 +154,40 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Observability
+              {isIntelView ? "Provider health" : "Observability"}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">
-              {observability ? `${observability.observableObjects}/${observability.totalObjects}` : "n/a"}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {observability
-                ? `${observability.activeCoverageGaps} active coverage gap${
+            {isIntelView && providerHealth ? (
+              <>
+                <div className="text-3xl font-bold">
+                  {providerHealth.trackedProviders === 0
+                    ? "No data"
+                    : `${providerHealth.healthyProviders}/${providerHealth.trackedProviders}`}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {providerHealth.trackedProviders === 0
+                    ? "No provider condition data in the 30d history window"
+                    : "healthy providers in the 30d history window"}
+                </div>
+                {providerHealth.trackedProviders > 0 && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {`${providerHealth.criticalProviders} critical · ${providerHealth.degradedProviders} degraded · ${providerHealth.providersWithActiveIssues} with active issues`}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="text-3xl font-bold">
+                  {`${observability.observableObjects}/${observability.totalObjects}`}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {`${observability.activeCoverageGaps} active coverage gap${
                     observability.activeCoverageGaps === 1 ? "" : "s"
-                  }`
-                : "Catalog coverage unavailable"}
-            </div>
+                  }`}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -179,7 +196,7 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Plan</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold">{getPlanLabel(account.plan)}</div>
+            <div className="text-xl font-bold">{getPlanLabel(account.plan, account.isAdmin, account.adminViewPlan)}</div>
             <div className="mt-1 text-xs capitalize text-muted-foreground">{account.status}</div>
           </CardContent>
         </Card>
@@ -192,10 +209,18 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {privateHistoryDays === null ? "Contract" : privateHistoryDays}
+              {isIntelView
+                ? "Aggregate"
+                : dashboardHistoryDays === null
+                  ? "Contract"
+                  : dashboardHistoryDays}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              {privateHistoryDays === null ? "history window" : "days"}
+              {isIntelView
+                ? "deep history"
+                : dashboardHistoryDays === null
+                  ? "history window"
+                  : "days"}
             </div>
           </CardContent>
         </Card>
@@ -264,10 +289,12 @@ export default function DashboardPage() {
           );
         })()}
 
-      {!allowsPrivateWatchlists(account.plan, account.isAdmin) && (
+      {!allowsPrivateWatchlists(account.plan, account.isAdmin, account.adminViewPlan) && (
         <Card className="border-border/60">
           <CardContent className="pt-6 text-sm text-muted-foreground">
-            Private monitoring starts on Watch. Public Record and Intel do not include private watchlists.
+            {isIntelView
+              ? "Intel is aggregate-only. Private watchlists and private alert destinations start on Watch or Signal."
+              : "Private monitoring starts on Watch. Public Record and Intel do not include private watchlists."}
           </CardContent>
         </Card>
       )}
@@ -295,9 +322,9 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-2">
-            {recentActivity.map((alert) => (
-              <Card key={alert.id} className="border-border/60">
+            <div className="space-y-2">
+              {recentActivity.map((alert) => (
+              <Card key={alert.dedupeKey} className="border-border/60">
                 <CardContent className="flex items-center justify-between gap-4 px-4 py-3">
                   <div className="flex min-w-0 items-center gap-3">
                     <AlertTriangle
@@ -335,34 +362,78 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Card className="border-border/60 transition-colors hover:border-violet-600/40">
-          <Link href="/dashboard/watchlists">
-            <CardContent className="flex items-center gap-3 pb-4 pt-4">
-              <Eye className="h-5 w-5 text-violet-500" />
-              <div>
-                <p className="text-sm font-medium">Manage watchlists</p>
-                <p className="text-xs text-muted-foreground">Choose focused scopes across assets, providers, chains, or the full catalog</p>
-              </div>
-            </CardContent>
-          </Link>
-        </Card>
-        <Card className="border-border/60 transition-colors hover:border-violet-600/40">
-          <Link href="/dashboard/destinations">
-            <CardContent className="flex items-center gap-3 pb-4 pt-4">
-              <Bell className="h-5 w-5 text-violet-500" />
-              <div>
-                <p className="text-sm font-medium">Delivery destinations</p>
-                <p className="text-xs text-muted-foreground">
-                  {canConfigurePrivateDestinations(account.plan, account.isAdmin)
-                    ? "Configure Discord, Telegram, or webhook delivery"
-                    : "Available on private monitoring plans"}
-                </p>
-              </div>
-            </CardContent>
-          </Link>
-        </Card>
-      </div>
+      {isIntelView ? (
+        <div className="grid gap-3 lg:grid-cols-3">
+          <Card className="border-border/60 transition-colors hover:border-violet-600/40">
+            <Link href="/dashboard/provider-reliability">
+              <CardContent className="flex items-center gap-3 pb-4 pt-4">
+                <ShieldCheck className="h-5 w-5 text-violet-500" />
+                <div>
+                  <p className="text-sm font-medium">Provider reliability</p>
+                  <p className="text-xs text-muted-foreground">
+                    Compare aggregate provider burden and active incident pressure
+                  </p>
+                </div>
+              </CardContent>
+            </Link>
+          </Card>
+          <Card className="border-border/60 transition-colors hover:border-violet-600/40">
+            <Link href="/dashboard/infrastructure-health">
+              <CardContent className="flex items-center gap-3 pb-4 pt-4">
+                <Activity className="h-5 w-5 text-violet-500" />
+                <div>
+                  <p className="text-sm font-medium">Infrastructure health trends</p>
+                  <p className="text-xs text-muted-foreground">
+                    Track daily openings, recoveries, and coverage interruptions
+                  </p>
+                </div>
+              </CardContent>
+            </Link>
+          </Card>
+          <Card className="border-border/60 transition-colors hover:border-violet-600/40">
+            <Link href="/dashboard/reports">
+              <CardContent className="flex items-center gap-3 pb-4 pt-4">
+                <FileText className="h-5 w-5 text-violet-500" />
+                <div>
+                  <p className="text-sm font-medium">Reports</p>
+                  <p className="text-xs text-muted-foreground">
+                    Weekly and monthly aggregate summaries across the visible history window
+                  </p>
+                </div>
+              </CardContent>
+            </Link>
+          </Card>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Card className="border-border/60 transition-colors hover:border-violet-600/40">
+            <Link href="/dashboard/watchlists">
+              <CardContent className="flex items-center gap-3 pb-4 pt-4">
+                <Eye className="h-5 w-5 text-violet-500" />
+                <div>
+                  <p className="text-sm font-medium">Manage watchlists</p>
+                  <p className="text-xs text-muted-foreground">Choose focused scopes across assets, providers, chains, or the full catalog</p>
+                </div>
+              </CardContent>
+            </Link>
+          </Card>
+          <Card className="border-border/60 transition-colors hover:border-violet-600/40">
+            <Link href="/dashboard/destinations">
+              <CardContent className="flex items-center gap-3 pb-4 pt-4">
+                <Bell className="h-5 w-5 text-violet-500" />
+                <div>
+                  <p className="text-sm font-medium">Delivery destinations</p>
+                  <p className="text-xs text-muted-foreground">
+                    {canConfigurePrivateDestinations(account.plan, account.isAdmin, account.adminViewPlan)
+                      ? "Configure Discord, Telegram, or webhook delivery"
+                      : "Available on private monitoring plans"}
+                  </p>
+                </div>
+              </CardContent>
+            </Link>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

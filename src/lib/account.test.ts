@@ -6,6 +6,9 @@ vi.mock("react", async (importOriginal) => ({
 }));
 vi.mock("@/lib/auth0", () => ({ auth0: { getSession: vi.fn() } }));
 vi.mock("@/lib/radar-api-backend", () => ({ bootstrapRadarAccount: vi.fn() }));
+vi.mock("@/lib/admin-plan-override-server", () => ({
+  getAdminViewPlanFromCookies: vi.fn().mockResolvedValue(null),
+}));
 
 import { auth0 } from "@/lib/auth0";
 import { bootstrapRadarAccount } from "@/lib/radar-api-backend";

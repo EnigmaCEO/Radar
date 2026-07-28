@@ -37,6 +37,12 @@ import {
   type DeliveryMode,
 } from "@/lib/delivery-modes";
 import {
+  getEffectiveStatusClassName,
+  getEffectiveStatusLabel,
+  isPlanPausedStatus,
+  type EffectiveEntitlementStatus,
+} from "@/lib/plan-compliance-ui";
+import {
   formatManualDeliveryReason,
   getManualDeliveryIssueLabel,
   getManualDeliveryIssueTone,
@@ -56,10 +62,15 @@ interface Destination {
   destinationUrl: string;
   deliveryMode: DeliveryMode;
   enabled: boolean;
+  selectedForPlan: boolean;
   minimumSeverity: string;
   pollingFrequency: string;
   lastPolledAt: string | null;
   configPreview: Record<string, string | null> | null;
+  effectiveStatus: EffectiveEntitlementStatus;
+  effectiveReasonCode: string | null;
+  effectiveReason: string | null;
+  pausedByPlan: boolean;
   createdAt: string;
 }
 
@@ -109,8 +120,8 @@ const DAILY_DIGEST_FREQUENCY = "24hr";
 
 // Cadence is chosen at delivery-creation time (not enforced in the DB). Watch is
 // limited to the daily-digest cadence; Signal and above can pick per-cycle options.
-function getAllowedFrequencies(plan: string, isAdmin = false): string[] {
-  return resolvePlan(plan, isAdmin) === "watch"
+function getAllowedFrequencies(plan: string, isAdmin = false, adminViewPlan?: string | null): string[] {
+  return resolvePlan(plan, isAdmin, adminViewPlan) === "watch"
     ? [DAILY_DIGEST_FREQUENCY]
     : Object.keys(FREQUENCY_LABEL);
 }
@@ -145,6 +156,7 @@ function DestCard({
   const [editSeverity, setEditSeverity] = useState(dest.minimumSeverity);
   const [editFrequency, setEditFrequency] = useState(dest.pollingFrequency);
   const [saving, setSaving] = useState(false);
+  const [selectingActive, setSelectingActive] = useState(false);
 
   async function handleDelete() {
     if (!confirm("Remove this delivery destination?")) return;
@@ -222,6 +234,23 @@ function DestCard({
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleKeepActive() {
+    setSelectingActive(true);
+    try {
+      const res = await fetch(`/api/destinations/${dest.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectForPlan: true }),
+        cache: "no-store",
+      });
+      if (res.ok) {
+        await onReload();
+      }
+    } finally {
+      setSelectingActive(false);
     }
   }
 
@@ -330,9 +359,11 @@ function DestCard({
               >
                 {DELIVERY_MODE_LABEL[dest.deliveryMode]}
               </span>
-              <Badge variant={dest.enabled ? "default" : "secondary"} className="text-xs">
-                {dest.enabled ? "active" : "paused"}
-              </Badge>
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getEffectiveStatusClassName(dest.effectiveStatus)}`}
+              >
+                {getEffectiveStatusLabel(dest.effectiveStatus)}
+              </span>
             </div>
             <p className="text-xs text-muted-foreground font-mono truncate">{identifier}</p>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -342,6 +373,24 @@ function DestCard({
               <span>|</span>
               <span>Min severity: {dest.minimumSeverity}</span>
             </div>
+            {dest.effectiveReason && <p className="text-xs text-amber-500">{dest.effectiveReason}</p>}
+            {(dest.effectiveStatus === "paused_over_limit" || dest.effectiveStatus === "needs_selection") && (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={handleKeepActive} disabled={selectingActive}>
+                  {selectingActive ? "Saving..." : "Keep active"}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" asChild>
+                  <Link href="/dashboard/settings">Upgrade plan</Link>
+                </Button>
+              </div>
+            )}
+            {dest.effectiveStatus === "paused_plan_required" && (
+              <div className="pt-1">
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" asChild>
+                  <Link href="/dashboard/settings">Upgrade plan</Link>
+                </Button>
+              </div>
+            )}
             {testResult === "ok" && (
               <p className="text-xs text-green-500">Test message sent successfully.</p>
             )}
@@ -1228,12 +1277,12 @@ function ManualDeliveryPanel({
 export default function DestinationsPage() {
   const { account } = useAccount();
   const plan = account.plan;
-  const allowedChannels = getAllowedDestinationChannels(plan, account.isAdmin);
-  const allowedFrequencies = getAllowedFrequencies(plan, account.isAdmin);
-  const allowedDeliveryModes = getAllowedDeliveryModes(plan, account.isAdmin);
-  const destinationLimit = getDestinationLimit(plan, account.isAdmin);
-  const destinationsEnabled = canConfigurePrivateDestinations(plan, account.isAdmin);
-  const manualDeliveryEnabled = canRunManualDelivery(plan, account.isAdmin);
+  const allowedChannels = getAllowedDestinationChannels(plan, account.isAdmin, account.adminViewPlan);
+  const allowedFrequencies = getAllowedFrequencies(plan, account.isAdmin, account.adminViewPlan);
+  const allowedDeliveryModes = getAllowedDeliveryModes(plan, account.isAdmin, account.adminViewPlan);
+  const destinationLimit = getDestinationLimit(plan, account.isAdmin, account.adminViewPlan);
+  const destinationsEnabled = canConfigurePrivateDestinations(plan, account.isAdmin, account.adminViewPlan);
+  const manualDeliveryEnabled = canRunManualDelivery(plan, account.isAdmin, account.adminViewPlan);
 
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1286,8 +1335,14 @@ export default function DestinationsPage() {
     };
   }, []);
 
-  const atDestinationLimit = destinations.length >= destinationLimit;
-  const canAdd = destinationsEnabled && !atDestinationLimit;
+  const activeDestinationCount = destinations.filter((destination) => destination.effectiveStatus === "active").length;
+  const pausedDestinationCount = destinations.filter((destination) =>
+    isPlanPausedStatus(destination.effectiveStatus),
+  ).length;
+  const destinationsNeedingSelection = destinations.filter(
+    (destination) => destination.effectiveStatus === "needs_selection",
+  ).length;
+  const canAdd = destinationsEnabled;
 
   return (
     <div className="max-w-7xl space-y-6">
@@ -1296,7 +1351,7 @@ export default function DestinationsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Delivery destinations</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {destinationsEnabled
-              ? `${destinations.length}${Number.isFinite(destinationLimit) ? ` of ${destinationLimit}` : ""} destinations · ${getPlanLabel(plan)}`
+              ? `${destinations.length} saved destinations · ${activeDestinationCount} active · ${getPlanLabel(plan, account.isAdmin, account.adminViewPlan)}`
               : "Not available on your current plan"}
           </p>
         </div>
@@ -1331,15 +1386,16 @@ export default function DestinationsPage() {
         </Card>
       )}
 
-      {destinationsEnabled && atDestinationLimit && !showForm && (
+      {destinationsEnabled && pausedDestinationCount > 0 && !showForm && (
         <Card className="border-violet-600/30 bg-violet-600/5">
           <CardContent className="py-4 px-4 flex items-center justify-between gap-4">
             <p className="text-sm">
-              You&apos;ve reached your plan&apos;s limit of {destinationLimit} delivery destination
-              {destinationLimit === 1 ? "" : "s"}. Upgrade to Signal to add more.
+              {destinationsNeedingSelection > 0 && Number.isFinite(destinationLimit)
+                ? `Your ${getPlanLabel(plan, account.isAdmin, account.adminViewPlan)} plan allows ${destinationLimit} active destination${destinationLimit === 1 ? "" : "s"}. Choose which destination stays active; the others will remain saved but paused.`
+                : `Your ${getPlanLabel(plan, account.isAdmin, account.adminViewPlan)} plan allows ${Number.isFinite(destinationLimit) ? destinationLimit : "multiple"} active destination${destinationLimit === 1 ? "" : "s"}. Extra or unsupported destinations are saved but paused.`}
             </p>
             <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white shrink-0" asChild>
-              <Link href="/dashboard/settings">
+              <Link href="/dashboard/settings?upgrade=radar_signal">
                 Upgrade <ArrowRight className="ml-1 h-3 w-3" />
               </Link>
             </Button>

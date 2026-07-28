@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { RadarAlert } from "./api-types";
 import {
+  collapseAlertsToLatestState,
   DASHBOARD_ACTIVE_ALERT_FETCH_LIMIT,
   DASHBOARD_RECENT_ALERT_PREVIEW_LIMIT,
   loadDashboardAlertSummary,
@@ -183,5 +184,37 @@ describe("alert-feed", () => {
     ]);
 
     expect(sorted.map((alert) => alert.id)).toEqual(["newer", "older"]);
+  });
+
+  it("collapses ledger events to the latest visible state per alert id", () => {
+    const collapsed = collapseAlertsToLatestState([
+      makeAlert({
+        id: "alert-1",
+        dedupeKey: "event-open",
+        status: "active",
+        updatedAt: "2026-07-19T09:32:00.000Z",
+        createdAt: "2026-07-19T09:32:00.000Z",
+        openedAt: "2026-07-19T09:32:00.000Z",
+      }),
+      makeAlert({
+        id: "alert-1",
+        dedupeKey: "event-resolved",
+        status: "resolved",
+        updatedAt: "2026-07-19T09:47:00.000Z",
+        createdAt: "2026-07-19T09:47:00.000Z",
+        resolvedAt: "2026-07-19T09:47:00.000Z",
+      }),
+      makeAlert({
+        id: "alert-2",
+        dedupeKey: "event-active",
+        status: "active",
+        updatedAt: "2026-07-19T09:48:00.000Z",
+        createdAt: "2026-07-19T09:48:00.000Z",
+      }),
+    ]);
+
+    expect(collapsed).toHaveLength(2);
+    expect(collapsed.find((alert) => alert.id === "alert-1")?.status).toBe("resolved");
+    expect(collapsed.find((alert) => alert.id === "alert-2")?.status).toBe("active");
   });
 });

@@ -34,6 +34,7 @@ describe("watchlists route backend adapter", () => {
     expect(forwardRadarApiRequest).toHaveBeenCalledWith("/v1/watchlists", {
       method: "GET",
       session: { user: { sub: "auth0|1" } },
+      headers: undefined,
     });
     expect(response.status).toBe(200);
   });
@@ -59,6 +60,7 @@ describe("watchlists route backend adapter", () => {
       session: { user: { sub: "auth0|1" } },
       body: '{"name":"All"}',
       contentType: "application/json",
+      headers: undefined,
     });
     expect(response.status).toBe(201);
   });

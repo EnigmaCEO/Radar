@@ -42,6 +42,7 @@ describe("manual delivery route backend adapter", () => {
       session: { user: { sub: "auth0|1" } },
       body: '{"dryRun":true,"window":"24h"}',
       contentType: "application/json",
+      headers: undefined,
     });
     expect(response.status).toBe(200);
   });

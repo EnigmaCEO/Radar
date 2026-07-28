@@ -65,6 +65,20 @@ function detailRows(alert: ReturnType<typeof toPublicRadarAlert>) {
       ? formatSeconds(alert.declaredHeartbeatSeconds)
       : evidenceDetails.expectedHeartbeat;
   const thresholdSourceLabel = alert.thresholdSourceLabel ?? evidenceDetails.thresholdSourceLabel;
+  const formatUsd = (value: number | null): string | null =>
+    typeof value === "number" && Number.isFinite(value)
+      ? new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          notation: "compact",
+          maximumFractionDigits: 1,
+        }).format(value)
+      : null;
+  const tvlSourceSuffix = alert.lpTvlSource
+    ? ` (${alert.lpTvlSource[0].toUpperCase()}${alert.lpTvlSource.slice(1)})`
+    : "";
+  const poolTvlBefore = formatUsd(alert.lpPriorTotalLiquidityUsd);
+  const poolTvlAfter = formatUsd(alert.lpTotalLiquidityUsd);
 
   return [
     ["Monitor type", alert.monitorType],
@@ -81,6 +95,9 @@ function detailRows(alert: ReturnType<typeof toPublicRadarAlert>) {
     ["Observed value", alert.observedValueLabel ?? null],
     ["Applied threshold", thresholdValue],
     ["Threshold source", thresholdSourceLabel],
+    ["Pool TVL before", poolTvlBefore && poolTvlAfter ? `${poolTvlBefore}${tvlSourceSuffix}` : null],
+    ["Pool TVL after", poolTvlBefore && poolTvlAfter ? `${poolTvlAfter}${tvlSourceSuffix}` : null],
+    ["Pool TVL", !poolTvlBefore && poolTvlAfter ? `${poolTvlAfter}${tvlSourceSuffix}` : null],
   ].filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0);
 }
 
@@ -191,7 +208,7 @@ export default async function PublicAlertDetailPage({
                 <p>
                   Lifecycle:{" "}
                   {formatAlertLifecycle({
-                    status: publicAlert.status,
+                    status: publicAlert.status as Parameters<typeof formatAlertLifecycle>[0]["status"],
                     openedAt: publicAlert.openedAt ?? undefined,
                     createdAt: publicAlert.createdAt,
                     resolvedAt: publicAlert.resolvedAt ?? undefined,

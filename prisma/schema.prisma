@@ -71,6 +71,7 @@ model RadarDeliveryDestination {
   destinationUrl   String    // display/routing: webhook URL, chat ID, endpoint URL, X handle
   deliveryMode     String    @default("alert_fanout") // alert_fanout | public_thread | digest | announcement_feed
   enabled          Boolean   @default(true)
+  selectedForPlan  Boolean?
   minimumSeverity  String    @default("watch")
   pollingFrequency String    @default("1hr") // 15min | 30min | 1hr | 24hr
   lastPolledAt     DateTime?

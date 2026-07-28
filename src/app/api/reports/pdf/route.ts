@@ -1,0 +1,22 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth0 } from "@/lib/auth0";
+import { buildAdminViewPlanHeaders } from "@/lib/admin-plan-override-server";
+import {
+  forwardRadarApiRequest,
+  toProxyResponse,
+} from "@/lib/radar-api-backend";
+
+export async function POST(request: NextRequest) {
+  const session = await auth0.getSession(request);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await request.text();
+  const response = await forwardRadarApiRequest("/v1/radar/reports/pdf", {
+    method: "POST",
+    session,
+    body,
+    contentType: request.headers.get("content-type"),
+    headers: buildAdminViewPlanHeaders(request),
+  });
+  return toProxyResponse(response);
+}

@@ -1,7 +1,72 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchSceAlertLedger } from "./sce-alerts";
+import { fetchSceAlertLedger, fetchSceAlerts } from "./sce-alerts";
 
 const ORIGINAL_ENV = { ...process.env };
+
+describe("fetchSceAlerts LP depth extraction", () => {
+  beforeEach(() => {
+    process.env.SCE_ADMIN_API_KEY = "super-secret-admin-key";
+    process.env.NEXT_PUBLIC_API_URL = "https://sce.example.test";
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    vi.unstubAllGlobals();
+  });
+
+  it("maps Moralis before/after USD depth from nested lpEvidence", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [
+          {
+            id: "RADAR-LP-1",
+            monitorType: "lp",
+            reasonCode: "LP_LIQUIDITY_DROP",
+            severity: "critical",
+            status: "active",
+            lpEvidence: {
+              totalLiquidityUsd: "10700000.50",
+              priorTotalLiquidityUsd: 34831341.34,
+              liquidityUsdDropPct: 69.28,
+              tvlSource: "moralis",
+            },
+          },
+        ],
+      }),
+    );
+
+    const [alert] = await fetchSceAlerts();
+    expect(alert.lpTotalLiquidityUsd).toBeCloseTo(10_700_000.5, 2);
+    expect(alert.lpPriorTotalLiquidityUsd).toBeCloseTo(34_831_341.34, 2);
+    expect(alert.lpLiquidityUsdDropPct).toBeCloseTo(69.28, 2);
+    expect(alert.lpTvlSource).toBe("moralis");
+  });
+
+  it("leaves LP depth fields null when lpEvidence is absent", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [
+          {
+            id: "RADAR-LP-2",
+            monitorType: "lp",
+            reasonCode: "LP_LIQUIDITY_DROP",
+            severity: "critical",
+            status: "active",
+          },
+        ],
+      }),
+    );
+
+    const [alert] = await fetchSceAlerts();
+    expect(alert.lpTotalLiquidityUsd).toBeNull();
+    expect(alert.lpPriorTotalLiquidityUsd).toBeNull();
+    expect(alert.lpTvlSource).toBeNull();
+  });
+});
 
 describe("fetchSceAlertLedger", () => {
   beforeEach(() => {

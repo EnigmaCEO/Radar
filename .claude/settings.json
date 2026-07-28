@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"^\\\\.git$|fly.toml|pyproject|requirements\")"
+    ],
+    "additionalDirectories": [
+      "d:\\Projects\\Sagitta\\SCE\\apps\\api\\app\\radar",
+      "d:\\Projects\\Sagitta\\SCE\\apps\\api\\tests"
+    ]
+  }
+}

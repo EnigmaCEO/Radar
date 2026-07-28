@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle, CreditCard, Loader2, Shield, ShieldCheck } from "lucide-react";
 import { useAccount } from "@/lib/account-context";
 import { getPlanLabel, resolvePlan } from "@/lib/plan-limits";
+import { isPlanPausedStatus, type EffectiveEntitlementStatus } from "@/lib/plan-compliance-ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 const PLAN_ORDER = ["public_record", "watch", "radar_intel", "radar_signal", "desk"] as const;
-type Plan = (typeof PLAN_ORDER)[number];
+type CustomerPlan = (typeof PLAN_ORDER)[number];
+type Plan = CustomerPlan | "internal";
 
-const NEXT_PLAN: Partial<Record<Plan, Plan>> = {
+const NEXT_PLAN: Partial<Record<CustomerPlan, CustomerPlan | "desk">> = {
   public_record: "watch",
   watch: "radar_signal",
   radar_signal: "desk",
@@ -27,13 +29,21 @@ const STATUS_CLASS: Record<string, string> = {
   canceled: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300",
 };
 
+interface ComplianceDestination {
+  effectiveStatus: EffectiveEntitlementStatus;
+}
+
+interface ComplianceWatchlist {
+  effectiveStatus: EffectiveEntitlementStatus;
+}
+
 export default function SettingsPage() {
   const { account, userEmail } = useAccount();
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const plan = resolvePlan(account.plan) as Plan;
-  const nextPlan = NEXT_PLAN[plan];
+  const plan = resolvePlan(account.plan, account.isAdmin, account.adminViewPlan) as Plan;
+  const nextPlan = plan === "internal" ? undefined : NEXT_PLAN[plan];
 
   const checkoutStatus = searchParams.get("checkout");
   const requestedUpgrade = searchParams.get("upgrade");
@@ -43,7 +53,11 @@ export default function SettingsPage() {
   const [mfaMessage, setMfaMessage] = useState<string | null>(null);
   const [upgrading, setUpgrading] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
-  const [autoUpgradeAttempted, setAutoUpgradeAttempted] = useState<string | null>(null);
+  const autoUpgradeAttemptedRef = useRef<string | null>(null);
+  const [compliance, setCompliance] = useState<{
+    destinations: ComplianceDestination[];
+    watchlists: ComplianceWatchlist[];
+  } | null>(null);
 
   useEffect(() => {
     if (checkoutStatus === "success") {
@@ -61,16 +75,31 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    Promise.all([
+      fetch("/api/destinations").then(async (response) => {
+        const data = await response.json();
+        return response.ok ? (data as ComplianceDestination[]) : [];
+      }),
+      fetch("/api/watchlists").then(async (response) => {
+        const data = await response.json();
+        return response.ok ? (data as ComplianceWatchlist[]) : [];
+      }),
+    ])
+      .then(([destinations, watchlists]) => setCompliance({ destinations, watchlists }))
+      .catch(() => setCompliance(null));
+  }, []);
+
+  useEffect(() => {
     if (!requestedUpgrade || checkoutStatus === "success") return;
     if (requestedUpgrade !== "watch" && requestedUpgrade !== "radar_signal" && requestedUpgrade !== "radar_intel") {
       return;
     }
     if (requestedUpgrade === plan) return;
-    if (autoUpgradeAttempted === requestedUpgrade) return;
+    if (autoUpgradeAttemptedRef.current === requestedUpgrade) return;
 
-    setAutoUpgradeAttempted(requestedUpgrade);
-    void startUpgrade(requestedUpgrade as Plan);
-  }, [autoUpgradeAttempted, checkoutStatus, plan, requestedUpgrade]);
+    autoUpgradeAttemptedRef.current = requestedUpgrade;
+    void startUpgrade(requestedUpgrade as CustomerPlan);
+  }, [checkoutStatus, plan, requestedUpgrade]);
 
   async function toggleMfa() {
     if (mfaEnabled === null) return;
@@ -99,7 +128,7 @@ export default function SettingsPage() {
     }
   }
 
-  async function startUpgrade(targetPlan: Plan) {
+  async function startUpgrade(targetPlan: CustomerPlan) {
     setUpgrading(true);
     setUpgradeError(null);
     try {
@@ -122,6 +151,13 @@ export default function SettingsPage() {
       setUpgrading(false);
     }
   }
+
+  const activeDestinations = compliance?.destinations.filter((destination) => destination.effectiveStatus === "active").length ?? 0;
+  const pausedDestinations =
+    compliance?.destinations.filter((destination) => isPlanPausedStatus(destination.effectiveStatus)).length ?? 0;
+  const activeWatchlists = compliance?.watchlists.filter((watchlist) => watchlist.effectiveStatus === "active").length ?? 0;
+  const pausedWatchlists =
+    compliance?.watchlists.filter((watchlist) => isPlanPausedStatus(watchlist.effectiveStatus)).length ?? 0;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -201,7 +237,7 @@ export default function SettingsPage() {
         <CardContent className="space-y-4 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Current plan</span>
-            <span className="font-semibold">{getPlanLabel(account.plan)}</span>
+            <span className="font-semibold">{getPlanLabel(account.plan, account.isAdmin, account.adminViewPlan)}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Status</span>
@@ -233,13 +269,13 @@ export default function SettingsPage() {
                     </>
                   ) : (
                     <>
-                      Upgrade to {getPlanLabel(nextPlan)} <ArrowRight className="ml-1 h-3 w-3" />
+                      Upgrade to {getPlanLabel(nextPlan, false, null)} <ArrowRight className="ml-1 h-3 w-3" />
                     </>
                   )}
                 </Button>
               ))}
 
-            {plan !== "radar_intel" && plan !== "desk" && (
+            {plan !== "radar_intel" && plan !== "desk" && plan !== "internal" && (
               <Button size="sm" variant="outline" disabled={upgrading} onClick={() => startUpgrade("radar_intel")}>
                 Add Intel
               </Button>
@@ -259,6 +295,32 @@ export default function SettingsPage() {
           </p>
         </CardContent>
       </Card>
+
+      {compliance && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Plan compliance</CardTitle>
+            <CardDescription>Saved configuration stays intact. Delivery and matching only run on items your current plan can keep active.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Destinations</span>
+              <span>{activeDestinations} active · {pausedDestinations} paused</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Watchlists</span>
+              <span>{activeWatchlists} active · {pausedWatchlists} paused</span>
+            </div>
+            {(pausedDestinations > 0 || pausedWatchlists > 0) && (
+              <Button size="sm" className="bg-violet-600 text-white hover:bg-violet-700" asChild>
+                <Link href={nextPlan && nextPlan !== "desk" ? `/dashboard/settings?upgrade=${nextPlan}` : "/dashboard/settings"}>
+                  Review upgrade options <ArrowRight className="ml-1 h-3 w-3" />
+                </Link>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

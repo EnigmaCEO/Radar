@@ -199,6 +199,8 @@ export function toProxyResponse(response: Response): Response {
   const headers = new Headers();
   const contentType = response.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
+  const contentDisposition = response.headers.get("content-disposition");
+  if (contentDisposition) headers.set("content-disposition", contentDisposition);
   const cacheControl = response.headers.get("cache-control");
   if (cacheControl) headers.set("cache-control", cacheControl);
   return new Response(response.body, {

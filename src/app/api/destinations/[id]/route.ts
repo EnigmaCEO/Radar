@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
+import { buildAdminViewPlanHeaders } from "@/lib/admin-plan-override-server";
 import {
   forwardRadarApiRequest,
   toProxyResponse,
@@ -17,6 +18,7 @@ export async function DELETE(
   const response = await forwardRadarApiRequest(`/v1/destinations/${id}`, {
     method: "DELETE",
     session,
+    headers: buildAdminViewPlanHeaders(request),
   });
   return toProxyResponse(response);
 }
@@ -36,6 +38,7 @@ export async function PATCH(
     session,
     body: bodyText,
     contentType: request.headers.get("content-type"),
+    headers: buildAdminViewPlanHeaders(request),
   });
   return toProxyResponse(response);
 }

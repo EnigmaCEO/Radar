@@ -56,6 +56,48 @@ export function sortAlertsByUpdatedAt(alerts: RadarAlert[]): RadarAlert[] {
   });
 }
 
+function alertRecencyTimestamp(alert: RadarAlert): number {
+  return Math.max(
+    Date.parse(alert.updatedAt) || 0,
+    Date.parse(alert.resolvedAt ?? "") || 0,
+    Date.parse(alert.openedAt ?? "") || 0,
+    Date.parse(alert.createdAt) || 0,
+  );
+}
+
+export function collapseAlertsToLatestState(alerts: RadarAlert[]): RadarAlert[] {
+  const latestById = new Map<string, RadarAlert>();
+
+  for (const alert of alerts) {
+    const current = latestById.get(alert.id);
+    if (!current) {
+      latestById.set(alert.id, alert);
+      continue;
+    }
+
+    const currentTimestamp = alertRecencyTimestamp(current);
+    const nextTimestamp = alertRecencyTimestamp(alert);
+    if (nextTimestamp > currentTimestamp) {
+      latestById.set(alert.id, alert);
+      continue;
+    }
+    if (nextTimestamp === currentTimestamp) {
+      if (Date.parse(alert.createdAt) > Date.parse(current.createdAt)) {
+        latestById.set(alert.id, alert);
+        continue;
+      }
+      if (
+        Date.parse(alert.createdAt) === Date.parse(current.createdAt) &&
+        alert.dedupeKey.localeCompare(current.dedupeKey) > 0
+      ) {
+        latestById.set(alert.id, alert);
+      }
+    }
+  }
+
+  return [...latestById.values()];
+}
+
 export function summarizeDashboardAlerts(
   activeAlerts: RadarAlert[],
   allAlerts: RadarAlert[] = activeAlerts,

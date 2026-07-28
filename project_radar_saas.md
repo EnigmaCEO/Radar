@@ -51,6 +51,27 @@
 - Single-group Telegram briefings now skip the duplicated top-level situation summary, and destination helper copy now steers public/community feeds toward `public_thread` instead of raw alert fanout.
 - Telegram alert fanout now uses a compact operational format with explicit breached threshold names and values on each alert line, avoiding ambiguous `vs 12h` shorthand when feeds in the same cluster have different warning/critical schedules.
 
+## Downgrade Compliance
+
+- Downgrades now preserve saved watchlists and delivery destinations instead of deleting or hard-rejecting over-plan state.
+- Destinations and watchlists expose computed effective entitlement states:
+  - `active`
+  - `paused_over_limit`
+  - `paused_plan_required`
+  - `needs_selection`
+  - `inactive`
+- Watch can keep multiple saved destinations, but only one plan-selected eligible destination is active at a time; extra saved destinations remain paused until chosen or upgraded.
+- Watchlists now save over-plan scopes and exact-object counts as paused instead of forcing destructive cleanup.
+- Manual and scheduled delivery both enforce effective entitlement state server-side and skip paused destinations with explicit skip reasons such as:
+  - `destination_paused_over_limit`
+  - `destination_paused_plan_required`
+  - `destination_needs_selection`
+  - `destination_channel_not_allowed`
+  - `destination_mode_not_allowed`
+  - `account_plan_inactive`
+- Watch delivery is now allowed for the single active compliant destination, including manual delivery tooling.
+- Dashboard destinations, watchlists, and settings now show saved-vs-active compliance state and upgrade guidance without exposing secret destination config.
+
 ## Alert Ledger Delivery
 
 - Manual delivery now fetches SCE ledger events from `/v1/sce/radar/alert-ledger` using server-side `since` and `until`.
@@ -138,3 +159,17 @@
   - Desk
 - Public alert detail pages now use a public-safe projection layer and render a CTA to monitor the object with Radar.
 - A public `/alerts` page now acts as the public alert feed entry point for Public Record.
+
+## Provider Reliability Semantics
+
+- Provider Reliability now separates evidence-led provider condition labels from Radar observability percentages.
+- Current provider condition is labeled as `Stable`, `Degraded`, `Critical`, or `No active issues` from qualified active provider-side findings only.
+- The 30-day condition pattern is labeled as `Clean`, `Recurring`, `Persistent`, or `Insufficient evidence` from verified or approved provider-side findings that match the current threshold doctrine.
+- Observability remains numeric and now reflects the direct percentage of successful observations versus expected observations.
+- Coverage and read failures no longer reduce a provider's condition labels.
+- `oracle_reference` detector groups are no longer rendered as providers; reference-deviation evidence is attributed only when trusted alert metadata names the actual providers.
+- Low-sample provider condition history now shows `Insufficient evidence` with verified findings, observation count, scoring window, and deterministic confidence.
+- Historical degradation copy now refers to providers with degraded condition history so the page does not imply a provider is currently degraded when active incidents are zero.
+- Condition burden is normalized by qualified exposure units so providers are not penalized for larger monitored footprints alone.
+- Resolved short-duration warnings now carry limited burden, while long-lived active critical findings materially raise the condition labels and persistent-pattern classification.
+- Provider rows now expose qualified findings, resolved findings, median duration, longest duration, recovery rate, recurrence rate, observations, coverage incidents, excluded records, confidence, and observability details without treating insufficient evidence as a numeric zero.

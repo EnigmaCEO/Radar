@@ -47,6 +47,10 @@ export interface SceAlert {
   objectState?: string | null;
   failureCause?: string | null;
   coverageTier?: string | null;
+  lpTotalLiquidityUsd?: number | null;
+  lpPriorTotalLiquidityUsd?: number | null;
+  lpLiquidityUsdDropPct?: number | null;
+  lpTvlSource?: string | null;
   openedAt?: string | null;
   resolvedAt?: string | null;
   createdAt: string;
@@ -105,6 +109,16 @@ export interface SceAlertLedgerEvent {
   objectState?: string | null;
   failureCause?: string | null;
   coverageTier?: string | null;
+  lpTotalLiquidityUsd?: number | null;
+  lpPriorTotalLiquidityUsd?: number | null;
+  lpLiquidityUsdDropPct?: number | null;
+  lpTvlSource?: string | null;
+}
+
+export interface SceAlertLedgerPage {
+  events: SceAlertLedgerEvent[];
+  count: number;
+  pageCount: number;
 }
 
 function firstString(...values: unknown[]): string | null {
@@ -159,6 +173,39 @@ function normalizeInteger(value: unknown): number | null {
     return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
   }
   return null;
+}
+
+function normalizeFloat(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+interface LpDepthFields {
+  lpTotalLiquidityUsd: number | null;
+  lpPriorTotalLiquidityUsd: number | null;
+  lpLiquidityUsdDropPct: number | null;
+  lpTvlSource: string | null;
+}
+
+// LP alerts carry Moralis-sourced dollar depth in the nested lpEvidence object.
+// Radar surfaces it so LP_LIQUIDITY_DROP copy can show before -> after TVL.
+function extractLpDepthFields(raw: Record<string, unknown>): LpDepthFields {
+  const lpEvidence = asRecord(raw.lpEvidence) ?? asRecord(raw.lp_evidence);
+  const readNumber = (camel: string, snake: string): number | null =>
+    normalizeFloat(lpEvidence?.[camel] ?? lpEvidence?.[snake] ?? undefined);
+  return {
+    lpTotalLiquidityUsd: readNumber("totalLiquidityUsd", "total_liquidity_usd"),
+    lpPriorTotalLiquidityUsd: readNumber("priorTotalLiquidityUsd", "prior_total_liquidity_usd"),
+    lpLiquidityUsdDropPct: readNumber("liquidityUsdDropPct", "liquidity_usd_drop_pct"),
+    lpTvlSource: firstString(
+      lpEvidence?.tvlSource,
+      lpEvidence?.tvl_source,
+    ),
+  };
 }
 
 function normalizeSeverity(value: unknown): string {
@@ -269,6 +316,7 @@ function sanitizeAlert(raw: Record<string, unknown>): SceAlert | null {
     objectState: firstString(raw.objectState, raw.object_state),
     failureCause: firstString(raw.failureCause, raw.failure_cause),
     coverageTier: firstString(raw.coverageTier, raw.coverage_tier),
+    ...extractLpDepthFields(raw),
     openedAt,
     resolvedAt,
     createdAt,
@@ -393,6 +441,7 @@ function sanitizeLedgerEvent(raw: Record<string, unknown>): SceAlertLedgerEvent 
     objectState: firstString(raw.objectState, raw.object_state),
     failureCause: firstString(raw.failureCause, raw.failure_cause),
     coverageTier: firstString(raw.coverageTier, raw.coverage_tier),
+    ...extractLpDepthFields(raw),
   };
 }
 
@@ -470,6 +519,19 @@ export async function fetchSceAlertLedger(options: {
   status?: string;
   signalClass?: string;
 }): Promise<SceAlertLedgerEvent[]> {
+  const page = await fetchSceAlertLedgerPage(options);
+  return page.events;
+}
+
+export async function fetchSceAlertLedgerPage(options: {
+  since: string;
+  until: string;
+  limit?: number;
+  after?: string;
+  monitorType?: string;
+  status?: string;
+  signalClass?: string;
+}): Promise<SceAlertLedgerPage> {
   const query = new URLSearchParams();
   query.set("since", options.since);
   query.set("until", options.until);
@@ -490,10 +552,19 @@ export async function fetchSceAlertLedger(options: {
       : typeof data === "object" && data !== null && Array.isArray((data as { events?: unknown }).events)
         ? (data as { events: unknown[] }).events
         : typeof data === "object" && data !== null && Array.isArray((data as { alerts?: unknown }).alerts)
-          ? (data as { alerts: unknown[] }).alerts
+        ? (data as { alerts: unknown[] }).alerts
         : [];
-
-  return (rawEvents as Record<string, unknown>[])
+  const events = (rawEvents as Record<string, unknown>[])
     .map(sanitizeLedgerEvent)
     .filter((event): event is SceAlertLedgerEvent => event !== null);
+  const countValue =
+    typeof data === "object" && data !== null && typeof (data as { count?: unknown }).count === "number"
+      ? Math.max(0, Math.trunc((data as { count: number }).count))
+      : events.length;
+
+  return {
+    events,
+    count: countValue,
+    pageCount: events.length,
+  };
 }

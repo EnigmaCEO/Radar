@@ -7,6 +7,13 @@ const MANUAL_DELIVERY_REASON_COPY: Record<string, string> = {
   no_eligible_announcement_events:
     "No active alert-opened, alert-updated, or severity-changed events were eligible for announcement feed delivery.",
   inactive_destination: "This destination is paused.",
+  destination_paused_over_limit: "This destination is saved but paused because your plan's active destination limit is full.",
+  destination_paused_plan_required: "This destination is saved but paused because it requires a higher plan.",
+  destination_needs_selection:
+    "This destination is saved, but you need to choose which destination stays active on your current plan.",
+  destination_channel_not_allowed: "This destination's channel is not available on your current plan.",
+  destination_mode_not_allowed: "This destination's delivery mode is not available on your current plan.",
+  account_plan_inactive: "This account does not have an active paid plan, so delivery was skipped.",
   missing_config: "This destination is missing delivery configuration.",
   cadence_not_due: "This destination is not due yet for its current cadence.",
   approved_public_thread_required: "Approve the latest public thread preview before sending it.",

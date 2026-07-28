@@ -273,6 +273,93 @@ describe("payload builders", () => {
     expect(previews[0].text).not.toContain("Observed: 98.7%");
   });
 
+  it("shows before -> after pool TVL for LP drop alerts when Moralis depth is present", () => {
+    process.env.RADAR_PUBLIC_BASE_URL = "https://radar.example.test/";
+    const previews = buildAnnouncementPreviewMessages(
+      "telegram_bot",
+      [
+        {
+          ...makeAlert({
+            id: "RADAR-ANN-LP-TVL",
+            chain: "Ethereum",
+            provider: "uniswap_v3",
+            monitorType: "lp",
+            asset: "USDC",
+            assetPair: "USDC/USDT",
+            severity: "critical",
+            reasonCode: "LP_LIQUIDITY_DROP",
+            observedValueLabel: "Observed value: 69.1%",
+            thresholdValueLabel: "Threshold: 30.0%",
+            lpTotalLiquidityUsd: 10_700_000,
+            lpPriorTotalLiquidityUsd: 34_831_341,
+            lpLiquidityUsdDropPct: 69.28,
+            lpTvlSource: "moralis",
+          }),
+          eventId: "evt_lp_tvl",
+          eventType: "alert_opened",
+        },
+      ],
+      DELIVERY_META,
+    );
+
+    expect(previews[0].text).toContain("Pool TVL: $34.8M → $10.7M (Moralis)");
+    // Trigger line stays on the L-based drop, unchanged.
+    expect(previews[0].text).toContain(
+      "Monitored liquidity drop: 69.1% since previous observation",
+    );
+  });
+
+  it("shows current-only pool TVL when no prior snapshot depth exists", () => {
+    process.env.RADAR_PUBLIC_BASE_URL = "https://radar.example.test/";
+    const previews = buildAnnouncementPreviewMessages(
+      "telegram_bot",
+      [
+        {
+          ...makeAlert({
+            id: "RADAR-ANN-LP-TVL-CUR",
+            monitorType: "lp",
+            assetPair: "USDC/USDT",
+            severity: "critical",
+            reasonCode: "LP_LIQUIDITY_DROP",
+            observedValueLabel: "Observed value: 69.1%",
+            thresholdValueLabel: "Threshold: 30.0%",
+            lpTotalLiquidityUsd: 34_831_341,
+            lpTvlSource: "moralis",
+          }),
+          eventId: "evt_lp_tvl_cur",
+          eventType: "alert_opened",
+        },
+      ],
+      DELIVERY_META,
+    );
+
+    expect(previews[0].text).toContain("Pool TVL: $34.8M (Moralis)");
+    expect(previews[0].text).not.toContain("→");
+  });
+
+  it("omits the pool TVL line when no depth is available", () => {
+    const previews = buildAnnouncementPreviewMessages(
+      "telegram_bot",
+      [
+        {
+          ...makeAlert({
+            id: "RADAR-ANN-LP-NO-TVL",
+            monitorType: "lp",
+            assetPair: "USDC/USDT",
+            reasonCode: "LP_LIQUIDITY_DROP",
+            observedValueLabel: "Observed value: 69.1%",
+            thresholdValueLabel: "Threshold: 30.0%",
+          }),
+          eventId: "evt_lp_no_tvl",
+          eventType: "alert_opened",
+        },
+      ],
+      DELIVERY_META,
+    );
+
+    expect(previews[0].text).not.toContain("Pool TVL");
+  });
+
   it("builds announcement-feed payloads for webhook delivery with per-alert structure", () => {
     process.env.RADAR_PUBLIC_BASE_URL = "https://radar.example.test";
     const payload = buildAnnouncementWebhookPayload(

@@ -15,9 +15,13 @@ export type EffectiveRadarPlan =
   | "radar_intel"
   | "desk";
 export type ResolvedRadarPlan = EffectiveRadarPlan | "internal";
+export interface DashboardNavLink {
+  href: string;
+  label: string;
+}
 
-function isAdminOverride(isAdmin?: boolean): boolean {
-  return isAdmin === true;
+function isAdminOverride(isAdmin?: boolean, adminViewPlan?: string | null): boolean {
+  return isAdmin === true && !adminViewPlan;
 }
 
 const PLAN_ALIAS_MAP: Record<string, EffectiveRadarPlan> = {
@@ -89,8 +93,28 @@ const PLAN_DESTINATION_LIMITS: Record<ResolvedRadarPlan, number> = {
   internal: Infinity,
 };
 
-export function resolvePlan(plan: string, isAdmin = false): ResolvedRadarPlan {
-  if (isAdminOverride(isAdmin)) return "internal";
+const DEFAULT_DASHBOARD_NAV_LINKS: DashboardNavLink[] = [
+  { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/alerts", label: "Alerts" },
+  { href: "/dashboard/watchlists", label: "Watchlists" },
+  { href: "/dashboard/thresholds", label: "Thresholds" },
+  { href: "/dashboard/destinations", label: "Delivery" },
+  { href: "/dashboard/settings", label: "Settings" },
+];
+
+const INTEL_DASHBOARD_NAV_LINKS: DashboardNavLink[] = [
+  { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/alerts", label: "Aggregate history" },
+  { href: "/dashboard/provider-reliability", label: "Provider reliability" },
+  { href: "/dashboard/infrastructure-health", label: "Health trends" },
+  { href: "/dashboard/reports", label: "Reports" },
+  { href: "/dashboard/thresholds", label: "Thresholds" },
+  { href: "/dashboard/settings", label: "Settings" },
+];
+
+export function resolvePlan(plan: string, isAdmin = false, adminViewPlan?: string | null): ResolvedRadarPlan {
+  if (isAdminOverride(isAdmin, adminViewPlan)) return "internal";
+  if (adminViewPlan) return PLAN_ALIAS_MAP[adminViewPlan] ?? "internal";
   return PLAN_ALIAS_MAP[plan] ?? "internal";
 }
 
@@ -118,8 +142,10 @@ export function hasActivePlan(account: {
   status: string;
   isAdmin?: boolean;
   stripeSubId?: string | null;
+  adminViewPlan?: string | null;
 }): boolean {
-  const resolved = resolvePlan(account.plan, account.isAdmin);
+  if (account.isAdmin) return true;
+  const resolved = resolvePlan(account.plan, account.isAdmin, account.adminViewPlan);
   if (resolved === "internal") return true;
   if (resolved === "public_record") return false;
 
@@ -134,43 +160,72 @@ export function hasActivePlan(account: {
   return Boolean(account.stripeSubId);
 }
 
-export function getPlanLabel(plan: string, isAdmin = false): string {
-  return PLAN_LABELS[resolvePlan(plan, isAdmin)];
+export function getPlanLabel(plan: string, isAdmin = false, adminViewPlan?: string | null): string {
+  return PLAN_LABELS[resolvePlan(plan, isAdmin, adminViewPlan)];
 }
 
-export function getPrivateObjectLimit(plan: string, isAdmin = false): number {
-  return PLAN_PRIVATE_OBJECT_LIMITS[resolvePlan(plan, isAdmin)];
+export function getPrivateObjectLimit(plan: string, isAdmin = false, adminViewPlan?: string | null): number {
+  return PLAN_PRIVATE_OBJECT_LIMITS[resolvePlan(plan, isAdmin, adminViewPlan)];
 }
 
-export function getWatchlistLimit(plan: string, isAdmin = false): number {
-  return getPrivateObjectLimit(plan, isAdmin);
+export function getWatchlistLimit(plan: string, isAdmin = false, adminViewPlan?: string | null): number {
+  return getPrivateObjectLimit(plan, isAdmin, adminViewPlan);
 }
 
-export function allowsPrivateWatchlists(plan: string, isAdmin = false): boolean {
-  return getPrivateObjectLimit(plan, isAdmin) > 0;
+export function allowsPrivateWatchlists(plan: string, isAdmin = false, adminViewPlan?: string | null): boolean {
+  return getPrivateObjectLimit(plan, isAdmin, adminViewPlan) > 0;
 }
 
-export function getPrivateHistoryDays(plan: string, isAdmin = false): number | null {
-  return PLAN_HISTORY_DAYS[resolvePlan(plan, isAdmin)];
+export function getPrivateHistoryDays(plan: string, isAdmin = false, adminViewPlan?: string | null): number | null {
+  return PLAN_HISTORY_DAYS[resolvePlan(plan, isAdmin, adminViewPlan)];
 }
 
-export function getAllowedDestinationChannels(plan: string, isAdmin = false): DestinationChannel[] {
-  return PLAN_DESTINATION_CHANNELS[resolvePlan(plan, isAdmin)];
+export function getDashboardAlertHistoryDays(
+  plan: string,
+  isAdmin = false,
+  adminViewPlan?: string | null,
+): number | null {
+  const resolved = resolvePlan(plan, isAdmin, adminViewPlan);
+  if (resolved === "radar_intel") return null;
+  return PLAN_HISTORY_DAYS[resolved];
 }
 
-export function canConfigurePrivateDestinations(plan: string, isAdmin = false): boolean {
-  return getAllowedDestinationChannels(plan, isAdmin).length > 0;
+export function getAllowedDestinationChannels(plan: string, isAdmin = false, adminViewPlan?: string | null): DestinationChannel[] {
+  return PLAN_DESTINATION_CHANNELS[resolvePlan(plan, isAdmin, adminViewPlan)];
 }
 
-export function getAllowedDeliveryModes(plan: string, isAdmin = false): DeliveryMode[] {
-  return PLAN_DELIVERY_MODES[resolvePlan(plan, isAdmin)];
+export function canConfigurePrivateDestinations(plan: string, isAdmin = false, adminViewPlan?: string | null): boolean {
+  return getAllowedDestinationChannels(plan, isAdmin, adminViewPlan).length > 0;
 }
 
-export function getDestinationLimit(plan: string, isAdmin = false): number {
-  return PLAN_DESTINATION_LIMITS[resolvePlan(plan, isAdmin)];
+export function getDashboardNavLinks(
+  plan: string,
+  isAdmin = false,
+  adminViewPlan?: string | null,
+): DashboardNavLink[] {
+  return resolvePlan(plan, isAdmin, adminViewPlan) === "radar_intel"
+    ? INTEL_DASHBOARD_NAV_LINKS
+    : DEFAULT_DASHBOARD_NAV_LINKS;
 }
 
-export function canRunManualDelivery(plan: string, isAdmin = false): boolean {
-  const resolved = resolvePlan(plan, isAdmin);
-  return resolved === "radar_signal" || resolved === "desk" || resolved === "internal";
+export function canAccessDashboardAlerts(
+  plan: string,
+  isAdmin = false,
+  adminViewPlan?: string | null,
+): boolean {
+  const resolved = resolvePlan(plan, isAdmin, adminViewPlan);
+  return resolved === "watch" || resolved === "radar_signal" || resolved === "radar_intel" || resolved === "desk" || resolved === "internal";
+}
+
+export function getAllowedDeliveryModes(plan: string, isAdmin = false, adminViewPlan?: string | null): DeliveryMode[] {
+  return PLAN_DELIVERY_MODES[resolvePlan(plan, isAdmin, adminViewPlan)];
+}
+
+export function getDestinationLimit(plan: string, isAdmin = false, adminViewPlan?: string | null): number {
+  return PLAN_DESTINATION_LIMITS[resolvePlan(plan, isAdmin, adminViewPlan)];
+}
+
+export function canRunManualDelivery(plan: string, isAdmin = false, adminViewPlan?: string | null): boolean {
+  const resolved = resolvePlan(plan, isAdmin, adminViewPlan);
+  return resolved === "watch" || resolved === "radar_signal" || resolved === "desk" || resolved === "internal";
 }

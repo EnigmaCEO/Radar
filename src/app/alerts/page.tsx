@@ -31,6 +31,7 @@ function statusLabel(status: string): string {
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 export default async function PublicAlertsPage() {
+  // eslint-disable-next-line react-hooks/purity -- This server-rendered page intentionally filters to a request-time 24h window.
   const cutoff = Date.now() - TWENTY_FOUR_HOURS_MS;
   const alerts = (await fetchSceAlerts({ limit: 200 }).catch(() => []))
     .map(toPublicRadarAlert)

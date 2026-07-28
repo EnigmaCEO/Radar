@@ -10,6 +10,9 @@ describe("manual delivery copy", () => {
     expect(formatManualDeliveryReason("below_destination_min_severity")).toBe(
       "No alerts met this destination's minimum severity.",
     );
+    expect(formatManualDeliveryReason("destination_needs_selection")).toContain(
+      "choose which destination stays active",
+    );
   });
 
   it("preserves freeform transport errors", () => {

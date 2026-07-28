@@ -5,8 +5,17 @@ import { Nav } from "@/components/nav";
 import { Footer } from "@/components/footer";
 import { getMonitoredValueUsd, formatUsd } from "@/lib/radar-stats";
 import { PRICING_PLAN_CONTENT, splitPlanPrice } from "@/lib/pricing-content";
+import {
+  isDisabledAlertStatus,
+  isResolvedAlertStatus,
+  isSupersededAlertStatus,
+} from "@/lib/alert-status";
+import { toPublicRadarAlert, type PublicRadarAlert } from "@/lib/public-alerts";
+import { fetchSceAlerts } from "@/lib/sce-alerts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+
+export const dynamic = "force-dynamic";
 
 // New users are returned to /pricing, which auto-starts Stripe checkout for the
 // selected plan once they authenticate.
@@ -144,8 +153,96 @@ const TYPE_CHIP: Record<string, string> = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+type LandingFeedSeverity = "watch" | "warning" | "critical" | "info";
+
+interface LandingFeedItem {
+  id: string;
+  href: string;
+  sev: LandingFeedSeverity;
+  msg: string;
+  src: string;
+  age: string;
+}
+
+const LANDING_ALERT_LIMIT = 12;
+
+function toLandingFeedSeverity(severity: string): LandingFeedSeverity {
+  if (severity === "critical") return "critical";
+  if (severity === "warning") return "warning";
+  if (severity === "watch") return "watch";
+  return "info";
+}
+
+function formatLandingAlertAge(value: string, now = Date.now()): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "now";
+
+  const elapsedMinutes = Math.max(0, Math.floor((now - timestamp) / 60000));
+  if (elapsedMinutes < 1) return "now";
+  if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) return `${elapsedHours}h ago`;
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return `${elapsedDays}d ago`;
+}
+
+function landingStatusPrefix(status: string): string | null {
+  if (isResolvedAlertStatus(status)) return "Resolved";
+  if (isDisabledAlertStatus(status)) return "Closed";
+  if (isSupersededAlertStatus(status)) return "Superseded";
+  return null;
+}
+
+function formatLandingAlertMessage(alert: PublicRadarAlert): string {
+  const prefix = landingStatusPrefix(alert.status);
+  return prefix ? `${prefix}: ${alert.summary}` : alert.summary;
+}
+
+function formatLandingAlertSource(alert: PublicRadarAlert): string {
+  const provider = alert.provider.trim();
+  const monitorType = alert.monitorType.replaceAll("_", " ").trim();
+  if (provider.length > 0 && monitorType.length > 0) return `${monitorType} / ${provider}`;
+  if (provider.length > 0) return provider;
+  if (monitorType.length > 0) return monitorType;
+  return "public record";
+}
+
+async function loadLandingFeed(): Promise<LandingFeedItem[]> {
+  const alerts = await fetchSceAlerts({ limit: LANDING_ALERT_LIMIT }).catch(() => []);
+
+  return alerts
+    .map(toPublicRadarAlert)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, LANDING_ALERT_LIMIT)
+    .map((alert) => ({
+      id: alert.id,
+      href: `/alerts/${alert.id}`,
+      sev: toLandingFeedSeverity(alert.severity),
+      msg: formatLandingAlertMessage(alert),
+      src: formatLandingAlertSource(alert),
+      age: formatLandingAlertAge(alert.updatedAt),
+    }));
+}
+
 export default async function LandingPage() {
-  const monitoredUsd = formatUsd(await getMonitoredValueUsd());
+  const [monitoredUsdValue, liveFeed] = await Promise.all([
+    getMonitoredValueUsd(),
+    loadLandingFeed(),
+  ]);
+  const monitoredUsd = formatUsd(monitoredUsdValue);
+  const feedItems: LandingFeedItem[] =
+    liveFeed.length > 0
+      ? liveFeed
+      : signals.map((signal, index) => ({
+          id: `sample-${index}`,
+          href: "/alerts",
+          sev: toLandingFeedSeverity(signal.sev),
+          msg: signal.msg,
+          src: signal.src,
+          age: signal.age,
+        }));
   return (
     <div className="flex min-h-screen flex-col">
       <Nav />
@@ -363,7 +460,7 @@ export default async function LandingPage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
               </span>
-              <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-widest text-slate-500">Example signal feed</span>
+              <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-widest text-slate-500">Latest alerts</span>
             </div>
             <div className="h-full w-12 bg-gradient-to-r from-[#07060f] to-transparent" />
           </div>
@@ -373,16 +470,20 @@ export default async function LandingPage() {
 
           {/* Scrolling track */}
           <div className="marquee-track py-2.5 pl-52">
-            {[...signals, ...signals].map((s, i) => (
-              <span key={i} className="inline-flex whitespace-nowrap px-7">
-                <span className="flex items-center gap-2">
-                  <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${SEV_COLOR[s.sev]}`} />
-                  <span className={`text-xs font-medium ${SEV_TEXT[s.sev]}`}>{s.msg}</span>
+            {[...feedItems, ...feedItems].map((alert, index) => (
+              <span key={`${alert.id}-${index}`} className="inline-flex whitespace-nowrap px-7">
+                <Link
+                  href={alert.href}
+                  className="flex items-center gap-2 transition-colors hover:text-white"
+                  title={alert.msg}
+                >
+                  <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${SEV_COLOR[alert.sev]}`} />
+                  <span className={`text-xs font-medium ${SEV_TEXT[alert.sev]}`}>{alert.msg}</span>
                   <span className="text-slate-700">·</span>
-                  <span className="font-mono text-[10px] uppercase tracking-wide text-slate-600">{s.src}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-wide text-slate-600">{alert.src}</span>
                   <span className="text-slate-700">·</span>
-                  <span className="text-[10px] text-slate-600">{s.age}</span>
-                </span>
+                  <span className="text-[10px] text-slate-600">{alert.age}</span>
+                </Link>
               </span>
             ))}
           </div>

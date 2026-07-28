@@ -13,7 +13,16 @@ import {
   WATCHLIST_SCOPE_LABELS,
   type WatchlistScopeIssue,
 } from "@/lib/watchlist-coverage";
-import type { WatchlistScopeType } from "@/lib/watchlist-filters";
+import {
+  WATCHLIST_SIGNAL_CLASSES,
+  type WatchlistScopeType,
+} from "@/lib/watchlist-filters";
+import {
+  getEffectiveStatusClassName,
+  getEffectiveStatusLabel,
+  isPlanPausedStatus,
+  type EffectiveEntitlementStatus,
+} from "@/lib/plan-compliance-ui";
 import {
   OBJECT_PICKER_MONITOR_TYPE_ORDER,
   filterObjectsForPicker,
@@ -45,6 +54,10 @@ interface Watchlist {
   statuses: string[];
   coverageCount: number;
   issue: WatchlistScopeIssue | null;
+  effectiveStatus: EffectiveEntitlementStatus;
+  effectiveReasonCode: string | null;
+  effectiveReason: string | null;
+  pausedByPlan: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -70,9 +83,15 @@ const STANDARD_SCOPE_TYPES: Exclude<WatchlistScopeType, "custom_monitor">[] = [
   "pillar_lens",
   "full_catalog",
 ];
+const DEFAULT_SIGNAL_CLASSES = [...WATCHLIST_SIGNAL_CLASSES];
 
 function uniq(values: string[]): string[] {
   return Array.from(new Set(values));
+}
+
+function normalizeSignalClasses(signalClasses?: string[]): string[] {
+  if (!signalClasses || signalClasses.length === 0) return DEFAULT_SIGNAL_CLASSES;
+  return uniq(signalClasses);
 }
 
 function describeScope(watchlist: Pick<Watchlist, "scopeType" | "assets" | "chains" | "providers" | "monitorTypes" | "objectIds" | "issue">): string {
@@ -159,7 +178,7 @@ function SignalClassChips({
     <div className="space-y-2">
       <Label>Signal classes</Label>
       <div className="flex flex-wrap gap-2">
-        {(["alert", "warning", "watch", "coverage"] as const).map((option) => {
+        {WATCHLIST_SIGNAL_CLASSES.map((option) => {
           const active = selected.includes(option);
 
           return (
@@ -336,7 +355,7 @@ function WatchlistSummaryCard({
   watchlist: Watchlist;
   onDelete: (id: string) => void;
   onEdit: () => void;
-  onToggle: (id: string, enabled: boolean) => void;
+  onToggle: (watchlist: Watchlist) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -360,7 +379,9 @@ function WatchlistSummaryCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: !watchlist.enabled }),
       });
-      if (response.ok) onToggle(watchlist.id, !watchlist.enabled);
+      if (response.ok) {
+        onToggle((await response.json()) as Watchlist);
+      }
     } finally {
       setToggling(false);
     }
@@ -372,9 +393,11 @@ function WatchlistSummaryCard({
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium">{watchlist.name}</span>
-            <Badge variant={watchlist.enabled ? "default" : "secondary"} className="text-xs">
-              {watchlist.enabled ? "active" : "paused"}
-            </Badge>
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getEffectiveStatusClassName(watchlist.effectiveStatus)}`}
+            >
+              {getEffectiveStatusLabel(watchlist.effectiveStatus)}
+            </span>
             {watchlist.issue && <Badge variant="warning">Action needed</Badge>}
           </div>
           {watchlist.description && <p className="text-xs text-muted-foreground">{watchlist.description}</p>}
@@ -385,10 +408,17 @@ function WatchlistSummaryCard({
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span>Min severity: {watchlist.minSeverity}</span>
             {watchlist.signalClasses.length > 0 && (
-              <span>Signals: {watchlist.signalClasses.map((value) => SIGNAL_CLASS_LABEL[value] ?? value).join(", ")}</span>
+              <span>
+                Signals:{" "}
+                {watchlist.signalClasses.length === WATCHLIST_SIGNAL_CLASSES.length
+                  ? "All"
+                  : watchlist.signalClasses.map((value) => SIGNAL_CLASS_LABEL[value] ?? value).join(", ")}
+              </span>
             )}
           </div>
-          {watchlist.issue && <p className="text-xs text-amber-500">{watchlist.issue.message}</p>}
+          {(watchlist.effectiveReason ?? watchlist.issue?.message) && (
+            <p className="text-xs text-amber-500">{watchlist.effectiveReason ?? watchlist.issue?.message}</p>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
@@ -442,7 +472,7 @@ function WatchlistForm({
 }) {
   const isEdit = initial !== undefined;
   const { account } = useAccount();
-  const resolvedPlan = resolvePlan(account.plan, account.isAdmin);
+  const resolvedPlan = resolvePlan(account.plan, account.isAdmin, account.adminViewPlan);
 
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -450,7 +480,9 @@ function WatchlistForm({
     initial?.scopeType && initial.scopeType !== "custom_monitor" ? initial.scopeType : seedObjectIds?.length ? "exact_objects" : null,
   );
   const [minSeverity, setMinSeverity] = useState(initial?.minSeverity ?? "watch");
-  const [signalClasses, setSignalClasses] = useState<string[]>(initial?.signalClasses ?? []);
+  const [signalClasses, setSignalClasses] = useState<string[]>(
+    normalizeSignalClasses(initial?.signalClasses),
+  );
   const [objectIds, setObjectIds] = useState<string[]>(uniq([...(initial?.objectIds ?? []), ...(seedObjectIds ?? [])]));
   const [asset, setAsset] = useState(initial?.scopeType === "asset_lens" ? initial.assets[0] ?? "" : "");
   const [chain, setChain] = useState(initial?.scopeType === "chain_lens" ? initial.chains[0] ?? "" : "");
@@ -491,12 +523,15 @@ function WatchlistForm({
     resolvedPlan === "watch" && scopeType === "exact_objects" && objectIds.length > 5
       ? "Watch allows up to 5 exact catalog objects."
       : null;
+  const pausedSaveMessage = exactObjectLimitMessage
+    ? `${exactObjectLimitMessage} This watchlist can still be saved, but it will remain paused until you narrow it back into your plan.`
+    : upgradeMessage
+      ? `${upgradeMessage} You can still save it and leave it paused until you upgrade or narrow the scope.`
+      : null;
   const saveDisabled =
     loading ||
     analysis.coverageCount === 0 ||
-    Boolean(analysis.issue) ||
-    Boolean(upgradeMessage) ||
-    Boolean(exactObjectLimitMessage);
+    Boolean(analysis.issue);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -609,7 +644,7 @@ function WatchlistForm({
                 selected={objectIds}
                 onChange={setObjectIds}
                 disabled={loading}
-                lockUnselected={watchExactObjectLimitReached}
+                lockUnselected={false}
               />
             )}
 
@@ -687,12 +722,11 @@ function WatchlistForm({
             <p className={`mt-1 text-xs ${upgradeMessage || analysis.issue || exactObjectLimitMessage ? "text-amber-500" : "text-muted-foreground"}`}>
               {analysis.coverageCount === 0
                 ? "Select a scope and configure it to cover at least one catalog object."
-                : exactObjectLimitMessage ??
-                  upgradeMessage ??
-                  analysis.issue?.message ??
+                : analysis.issue?.message ??
+                  pausedSaveMessage ??
                   (watchExactObjectLimitReached
-                    ? "Watch is at its exact-object limit. Deselect an object to free capacity."
-                    : `Available on ${scopeType ? scopePlanLine(scopeType) : getPlanLabel(account.plan)}.`)}
+                    ? "This watchlist can still be saved, but it will remain paused until you narrow it back into your plan."
+                    : `Available on ${scopeType ? scopePlanLine(scopeType) : getPlanLabel(account.plan, account.isAdmin, account.adminViewPlan)}.`)}
             </p>
           </div>
 
@@ -722,8 +756,8 @@ function WatchlistForm({
 export default function WatchlistsPage() {
   const { account } = useAccount();
   const searchParams = useSearchParams();
-  const planAllowsPrivateWatchlists = allowsPrivateWatchlists(account.plan, account.isAdmin);
-  const planLabel = getPlanLabel(account.plan);
+  const planAllowsPrivateWatchlists = allowsPrivateWatchlists(account.plan, account.isAdmin, account.adminViewPlan);
+  const planLabel = getPlanLabel(account.plan, account.isAdmin, account.adminViewPlan);
   const preselectedObjectId = searchParams.get("objectId");
 
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
@@ -760,6 +794,8 @@ export default function WatchlistsPage() {
   const watchlistsUnavailable = !planAllowsPrivateWatchlists;
   const formVisible =
     showForm || (Boolean(catalog) && planAllowsPrivateWatchlists && (seedObjectIds.length > 0 || !mainWatchlist));
+  const activeWatchlistCount = watchlists.filter((watchlist) => watchlist.effectiveStatus === "active").length;
+  const pausedWatchlist = mainWatchlist && isPlanPausedStatus(mainWatchlist.effectiveStatus) ? mainWatchlist : null;
 
   return (
     <div className="max-w-7xl space-y-6">
@@ -767,7 +803,7 @@ export default function WatchlistsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Watchlist</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {mainWatchlist ? "Main watchlist configured" : "No main watchlist yet"} · plan: <span>{planLabel}</span>
+            {watchlists.length} saved watchlist{watchlists.length === 1 ? "" : "s"} · {activeWatchlistCount} active · <span>{planLabel}</span>
           </p>
         </div>
         {!watchlistsUnavailable && catalog && mainWatchlist && (
@@ -781,7 +817,7 @@ export default function WatchlistsPage() {
         <Card className="border-violet-600/30 bg-violet-600/5">
           <CardContent className="flex items-center justify-between gap-4 px-4 py-4">
             <p className="text-sm">
-              {resolvePlan(account.plan, account.isAdmin) === "radar_intel"
+              {resolvePlan(account.plan, account.isAdmin, account.adminViewPlan) === "radar_intel"
                 ? "Intel does not include private watchlists."
                 : "Private monitoring starts on Watch. Upgrade to create a watchlist."}
             </p>
@@ -797,6 +833,22 @@ export default function WatchlistsPage() {
       {catalogError && (
         <Card className="border-destructive/40 bg-destructive/5">
           <CardContent className="px-4 py-3 text-sm text-destructive">{catalogError}</CardContent>
+        </Card>
+      )}
+
+      {pausedWatchlist && !formVisible && (
+        <Card className="border-violet-600/30 bg-violet-600/5">
+          <CardContent className="flex items-center justify-between gap-4 px-4 py-4">
+            <p className="text-sm">
+              {pausedWatchlist.effectiveReason ??
+                "This watchlist is saved, but its scope is currently paused by your plan."}
+            </p>
+            <Button size="sm" className="shrink-0 bg-violet-600 text-white hover:bg-violet-700" asChild>
+              <Link href="/dashboard/settings">
+                Upgrade <ArrowRight className="ml-1 h-3 w-3" />
+              </Link>
+            </Button>
+          </CardContent>
         </Card>
       )}
 
@@ -826,9 +878,9 @@ export default function WatchlistsPage() {
               watchlist={mainWatchlist}
               onDelete={() => setWatchlists([])}
               onEdit={() => setShowForm(true)}
-              onToggle={(id, enabled) =>
+              onToggle={(nextWatchlist) =>
                 setWatchlists((current) =>
-                  current.map((watchlist) => (watchlist.id === id ? { ...watchlist, enabled } : watchlist)),
+                  current.map((watchlist) => (watchlist.id === nextWatchlist.id ? nextWatchlist : watchlist)),
                 )
               }
             />

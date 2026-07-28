@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 type LocalDateTimePreset = "compact" | "detailed";
 
@@ -94,6 +94,10 @@ function utcTimeZone() {
   return "UTC";
 }
 
+function subscribeToNothing() {
+  return () => {};
+}
+
 export function LocalDateTime({
   value,
   preset = "compact",
@@ -101,13 +105,11 @@ export function LocalDateTime({
   value: string;
   preset?: LocalDateTimePreset;
 }) {
-  const [formatted, setFormatted] = useState(() =>
-    formatDateTimeForZone(value, preset, utcTimeZone()),
+  const formatted = useSyncExternalStore(
+    subscribeToNothing,
+    () => formatDateTimeForZone(value, preset),
+    () => formatDateTimeForZone(value, preset, utcTimeZone()),
   );
-
-  useEffect(() => {
-    setFormatted(formatDateTimeForZone(value, preset));
-  }, [value, preset]);
 
   return (
     <time dateTime={value} suppressHydrationWarning>
@@ -123,13 +125,11 @@ export function LocalDateWindow({
   start: string;
   end: string;
 }) {
-  const [formatted, setFormatted] = useState(() =>
-    formatDateWindowForZone(start, end, utcTimeZone()),
+  const formatted = useSyncExternalStore(
+    subscribeToNothing,
+    () => formatDateWindowForZone(start, end),
+    () => formatDateWindowForZone(start, end, utcTimeZone()),
   );
-
-  useEffect(() => {
-    setFormatted(formatDateWindowForZone(start, end));
-  }, [start, end]);
 
   return <span suppressHydrationWarning>{formatted}</span>;
 }

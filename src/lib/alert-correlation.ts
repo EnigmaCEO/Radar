@@ -176,7 +176,7 @@ function buildCluster(alerts: RadarAlert[]): CorrelatedAlertGroup {
       : undefined;
 
   return {
-    id: `group:${sorted.map((alert) => alert.id).join(",")}`,
+    id: `group:${sorted.map((alert) => alert.dedupeKey).join(",")}`,
     title: buildClusterTitle(sorted),
     status: first.status,
     severity: dominantSeverity(sorted),

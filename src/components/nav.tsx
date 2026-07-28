@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAccount } from "@/lib/account-context";
+import { getDashboardNavLinks } from "@/lib/plan-limits";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -128,17 +130,15 @@ export function Nav() {
   );
 }
 
-const dashboardLinks = [
-  { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/alerts", label: "Alerts" },
-  { href: "/dashboard/watchlists", label: "Watchlists" },
-  { href: "/dashboard/thresholds", label: "Thresholds" },
-  { href: "/dashboard/destinations", label: "Delivery" },
-  { href: "/dashboard/settings", label: "Settings" },
-];
-
 export function DashboardNav() {
   const pathname = usePathname();
+  const { account } = useAccount();
+  const dashboardLinks = getDashboardNavLinks(
+    account.plan,
+    account.isAdmin,
+    account.adminViewPlan,
+  );
+
   return (
     <aside className="w-56 shrink-0 hidden md:block border-r border-border">
       <nav className="flex flex-col gap-1 p-3 pt-4">

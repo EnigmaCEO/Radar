@@ -36,9 +36,16 @@ export async function GET(request: NextRequest) {
   }
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      return NextResponse.json(
+        { error: "Thresholds backend rejected the server admin key." },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json(
       { error: `SCE request failed (${response.status}).` },
-      { status: response.status === 401 || response.status === 403 ? 502 : response.status },
+      { status: response.status },
     );
   }
 

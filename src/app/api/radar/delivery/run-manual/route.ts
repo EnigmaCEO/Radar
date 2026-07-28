@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
+import { buildAdminViewPlanHeaders } from "@/lib/admin-plan-override-server";
 import {
   forwardRadarApiRequest,
   toProxyResponse,
@@ -16,6 +17,7 @@ export async function POST(request: NextRequest) {
     session,
     body,
     contentType: request.headers.get("content-type"),
+    headers: buildAdminViewPlanHeaders(request),
   });
   return toProxyResponse(response);
 }

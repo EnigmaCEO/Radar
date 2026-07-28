@@ -36,6 +36,10 @@ export interface PublicRadarAlert {
   objectState: string | null;
   failureCause: string | null;
   coverageTier: string | null;
+  lpTotalLiquidityUsd: number | null;
+  lpPriorTotalLiquidityUsd: number | null;
+  lpLiquidityUsdDropPct: number | null;
+  lpTvlSource: string | null;
   openedAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -79,6 +83,10 @@ export function toPublicRadarAlert(alert: SceAlert): PublicRadarAlert {
     objectState: alert.objectState ?? null,
     failureCause: alert.failureCause ?? null,
     coverageTier: alert.coverageTier ?? null,
+    lpTotalLiquidityUsd: alert.lpTotalLiquidityUsd ?? null,
+    lpPriorTotalLiquidityUsd: alert.lpPriorTotalLiquidityUsd ?? null,
+    lpLiquidityUsdDropPct: alert.lpLiquidityUsdDropPct ?? null,
+    lpTvlSource: alert.lpTvlSource ?? null,
     openedAt: alert.openedAt ?? null,
     resolvedAt: alert.resolvedAt ?? null,
     createdAt: alert.createdAt,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getRadarThresholds } from "@/lib/api";
+import { ApiError, getRadarThresholds } from "@/lib/api";
 import type {
   SceThresholdItem,
   SceThresholdMonitorType,
@@ -98,6 +98,27 @@ function locationLabel(item: SceThresholdItem): string {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+function thresholdsErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 401) return "Sign in is required to view thresholds.";
+
+    const detail =
+      typeof error.detail === "object" && error.detail !== null && "error" in error.detail
+        ? error.detail.error
+        : null;
+
+    if (typeof detail === "string" && detail.trim().length > 0) {
+      return `Thresholds are currently unavailable. ${detail}`;
+    }
+
+    if (error.status >= 500) {
+      return "Thresholds are currently unavailable due to a backend or configuration issue. This is not an Intel plan restriction.";
+    }
+  }
+
+  return "Unable to load thresholds right now. This is not an Intel plan restriction.";
+}
+
 export default function ThresholdsPage() {
   const [data, setData] = useState<SceThresholdResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -113,7 +134,7 @@ export default function ThresholdsPage() {
       })
       .catch((err) => {
         console.error(err);
-        if (!cancelled) setError("Unable to load thresholds. You may not have access to this data.");
+        if (!cancelled) setError(thresholdsErrorMessage(err));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

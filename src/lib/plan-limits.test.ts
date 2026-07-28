@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   allowsPrivateWatchlists,
+  canAccessDashboardAlerts,
   canConfigurePrivateDestinations,
   canRunManualDelivery,
   getAllowedDeliveryModes,
   getAllowedDestinationChannels,
+  getDashboardAlertHistoryDays,
+  getDashboardNavLinks,
   getDestinationLimit,
   hasActivePlan,
   getPlanLabel,
@@ -57,8 +60,8 @@ describe("plan-limits", () => {
     expect(getDestinationLimit("radar_intel")).toBe(0);
   });
 
-  it("only allows manual delivery on Signal, Desk, and internal plans", () => {
-    expect(canRunManualDelivery("watch")).toBe(false);
+  it("allows manual delivery on Watch, Signal, Desk, and internal plans", () => {
+    expect(canRunManualDelivery("watch")).toBe(true);
     expect(canRunManualDelivery("radar_signal")).toBe(true);
     expect(canRunManualDelivery("radar_intel")).toBe(false);
     expect(canRunManualDelivery("internal")).toBe(true);
@@ -69,6 +72,33 @@ describe("plan-limits", () => {
     expect(getPrivateHistoryDays("radar_signal")).toBe(90);
     expect(getPrivateHistoryDays("radar_intel")).toBe(0);
     expect(getPrivateHistoryDays("desk")).toBeNull();
+    expect(getDashboardAlertHistoryDays("radar_intel")).toBeNull();
+  });
+
+  it("switches dashboard nav for Intel accounts", () => {
+    expect(getDashboardNavLinks("radar_signal").map((link) => link.label)).toEqual([
+      "Overview",
+      "Alerts",
+      "Watchlists",
+      "Thresholds",
+      "Delivery",
+      "Settings",
+    ]);
+    expect(getDashboardNavLinks("radar_intel").map((link) => link.label)).toEqual([
+      "Overview",
+      "Aggregate history",
+      "Provider reliability",
+      "Health trends",
+      "Reports",
+      "Thresholds",
+      "Settings",
+    ]);
+  });
+
+  it("allows Intel to access dashboard alert history while keeping Public Record blocked", () => {
+    expect(canAccessDashboardAlerts("radar_intel")).toBe(true);
+    expect(canAccessDashboardAlerts("watch")).toBe(true);
+    expect(canAccessDashboardAlerts("free")).toBe(false);
   });
 
   it("treats active and past-due paid subscriptions as dashboard-eligible", () => {
@@ -95,5 +125,13 @@ describe("plan-limits", () => {
     expect(canConfigurePrivateDestinations("free", true)).toBe(true);
     expect(canRunManualDelivery("free", true)).toBe(true);
     expect(hasActivePlan({ plan: "free", status: "canceled", isAdmin: true })).toBe(true);
+  });
+
+  it("lets admin accounts simulate customer plan capabilities without losing dashboard access", () => {
+    expect(resolvePlan("free", true, "watch")).toBe("watch");
+    expect(allowsPrivateWatchlists("free", true, "watch")).toBe(true);
+    expect(canConfigurePrivateDestinations("free", true, "radar_intel")).toBe(false);
+    expect(canRunManualDelivery("free", true, "watch")).toBe(true);
+    expect(hasActivePlan({ plan: "free", status: "canceled", isAdmin: true, adminViewPlan: "watch" })).toBe(true);
   });
 });
