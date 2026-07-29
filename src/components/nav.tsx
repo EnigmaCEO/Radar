@@ -51,15 +51,7 @@ export function Nav() {
               isMarketing ? "text-white" : "text-foreground",
             )}
           >
-            Radar
-          </span>
-          <span
-            className={cn(
-              "text-xs font-normal",
-              isMarketing ? "text-purple-400/70" : "text-muted-foreground",
-            )}
-          >
-            by Sagitta Labs
+            Sagitta Radar
           </span>
         </Link>
 

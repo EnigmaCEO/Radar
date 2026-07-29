@@ -28,7 +28,7 @@ export function DashboardShell({
             <div className="flex h-14 items-center justify-between px-4 md:px-6">
               <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
                 <Logo size={24} />
-                <span className="text-foreground">Radar</span>
+                <span className="text-foreground">Sagitta Radar</span>
               </Link>
 
               <div className="flex items-center gap-2">

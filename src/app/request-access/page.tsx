@@ -61,8 +61,7 @@ export default function RequestAccessPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#07060f] p-4">
       <Link href="/" className="mb-8 flex items-center gap-2.5">
         <Logo size={36} />
-        <span className="text-xl font-bold text-white">Radar</span>
-        <span className="text-sm text-purple-400/70">by Sagitta Labs</span>
+        <span className="text-xl font-bold text-white">Sagitta Radar</span>
       </Link>
 
       <Card className="w-full max-w-md border-white/10 bg-white/5 text-white backdrop-blur">

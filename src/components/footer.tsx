@@ -9,8 +9,7 @@ export function Footer() {
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="mb-3 flex items-center gap-2 font-semibold text-foreground">
               <Logo size={20} />
-              <span>Radar</span>
-              <span className="text-xs font-normal text-muted-foreground">by Sagitta Labs</span>
+              <span>Sagitta Radar</span>
             </Link>
             <p className="text-xs leading-relaxed text-muted-foreground">
               Real-time DeFi infrastructure intelligence. Monitor oracles, bridges, and liquidity
