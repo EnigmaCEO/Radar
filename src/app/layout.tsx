@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Radar by Sagitta Labs — DeFi Infrastructure Intelligence",
+    default: "Sagitta Radar — DeFi Infrastructure Intelligence",
     template: "%s | Radar",
   },
   description:
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: "https://radar.sagitta.systems",
-    siteName: "Radar by Sagitta Labs",
+    siteName: "Sagitta Radar",
   },
 };
 

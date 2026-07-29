@@ -10,7 +10,7 @@ export function Logo({ size = 32, className }: LogoProps) {
   return (
     <Image
       src="/logo.png"
-      alt="Radar by Sagitta Labs"
+      alt="Sagitta Radar"
       width={size}
       height={size}
       className={cn("select-none", className)}
