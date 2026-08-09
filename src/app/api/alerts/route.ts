@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { getAdminViewPlanFromRequest } from "@/lib/admin-plan-override-server";
 import {
-  fetchSceAlerts,
+  fetchSceAlertCollection,
   SceAlertsError,
 } from "@/lib/sce-alerts";
-import type { RadarAlertPage } from "@/lib/api-types";
+import {
+  alertDataError,
+  alertStateHttpStatus,
+  mapAlertCollection,
+  toPublicAlertEnvelope,
+  type AlertCollectionResult,
+} from "@/lib/alert-data-state";
+import type { RadarAlert, RadarAlertPage } from "@/lib/api-types";
 import {
   canAccessDashboardAlerts,
   getDashboardAlertHistoryDays,
@@ -64,7 +71,8 @@ export async function GET(request: NextRequest) {
       adminViewPlan,
     );
     const now = new Date();
-    let responseBody: RadarAlertPage;
+    let result: AlertCollectionResult<RadarAlert>;
+    let upstreamCount: number | undefined;
 
     if (historyMode === "ledger") {
       const ledger = await fetchLedgerHistory({
@@ -78,38 +86,58 @@ export async function GET(request: NextRequest) {
         limit,
         monitorType,
         status,
+        surface: "api-alerts-ledger",
       });
-      const alerts = ledger.events
-        .map(toRadarAlertFromLedger)
-        .filter((alert) => (severity ? alert.severity === severity : true));
-
-      responseBody = {
-        alerts,
-        count: severity ? alerts.length : ledger.count,
-        pageCount: alerts.length,
-      };
+      result = mapAlertCollection(ledger, (events) =>
+        events
+          .map(toRadarAlertFromLedger)
+          .filter((alert) => (severity ? alert.severity === severity : true)),
+      );
+      upstreamCount = severity ? undefined : ledger.count;
     } else {
-      const alerts = (await fetchSceAlerts({ status, limit }))
-        .filter((alert) => (severity ? alert.severity === severity : true))
-        .filter((alert) => (monitorType ? alert.monitorType === monitorType : true))
-        .filter((alert) =>
-          historyDays === null ? true : isWithinHistoryWindow(alert, historyDays, now),
-        )
-        .map(toRadarAlert);
-
-      responseBody = {
-        alerts,
-        count: alerts.length,
-        pageCount: alerts.length,
-      };
+      const collection = await fetchSceAlertCollection({
+        status,
+        limit,
+        surface: "api-alerts-snapshot",
+      });
+      result = mapAlertCollection(collection, (alerts) =>
+        alerts
+          .filter((alert) => (severity ? alert.severity === severity : true))
+          .filter((alert) => (monitorType ? alert.monitorType === monitorType : true))
+          .filter((alert) =>
+            historyDays === null ? true : isWithinHistoryWindow(alert, historyDays, now),
+          )
+          .map(toRadarAlert),
+      );
     }
 
+    // The legacy `alerts`/`count`/`pageCount` fields are preserved so existing
+    // consumers keep working; `state` and the freshness fields are additive.
+    // An unavailable read never returns 200, so a consumer that ignores the new
+    // fields entirely still cannot mistake it for a confirmed empty page.
+    const responseBody: RadarAlertPage = toPublicAlertEnvelope(result, {
+      count: upstreamCount ?? result.alerts.length,
+      pageCount: result.alerts.length,
+    });
+
     return NextResponse.json(responseBody, {
+      status: alertStateHttpStatus(result.state, result.error),
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {
     if (error instanceof SceAlertsError) {
-      return NextResponse.json({ error: error.message }, { status: 502 });
+      return NextResponse.json(
+        {
+          state: "unavailable",
+          alerts: [],
+          count: 0,
+          pageCount: 0,
+          source: "sce",
+          fetchedAt: new Date().toISOString(),
+          error: alertDataError(error.code, error.requestId),
+        },
+        { status: alertStateHttpStatus("unavailable", alertDataError(error.code)) },
+      );
     }
     console.error("Alerts proxy error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchSceAlertLedger, fetchSceAlerts } from "./sce-alerts";
+import { fetchSceAlertCollection, fetchSceAlertLedger } from "./sce-alerts";
 
 const ORIGINAL_ENV = { ...process.env };
 
-describe("fetchSceAlerts LP depth extraction", () => {
+describe("fetchSceAlertCollection LP depth extraction", () => {
   beforeEach(() => {
     process.env.SCE_ADMIN_API_KEY = "super-secret-admin-key";
     process.env.NEXT_PUBLIC_API_URL = "https://sce.example.test";
@@ -26,6 +26,7 @@ describe("fetchSceAlerts LP depth extraction", () => {
             reasonCode: "LP_LIQUIDITY_DROP",
             severity: "critical",
             status: "active",
+            createdAt: "2026-08-01T00:00:00.000Z",
             lpEvidence: {
               totalLiquidityUsd: "10700000.50",
               priorTotalLiquidityUsd: 34831341.34,
@@ -37,7 +38,7 @@ describe("fetchSceAlerts LP depth extraction", () => {
       }),
     );
 
-    const [alert] = await fetchSceAlerts();
+    const [alert] = (await fetchSceAlertCollection()).alerts;
     expect(alert.lpTotalLiquidityUsd).toBeCloseTo(10_700_000.5, 2);
     expect(alert.lpPriorTotalLiquidityUsd).toBeCloseTo(34_831_341.34, 2);
     expect(alert.lpLiquidityUsdDropPct).toBeCloseTo(69.28, 2);
@@ -56,12 +57,13 @@ describe("fetchSceAlerts LP depth extraction", () => {
             reasonCode: "LP_LIQUIDITY_DROP",
             severity: "critical",
             status: "active",
+            createdAt: "2026-08-01T00:00:00.000Z",
           },
         ],
       }),
     );
 
-    const [alert] = await fetchSceAlerts();
+    const [alert] = (await fetchSceAlertCollection()).alerts;
     expect(alert.lpTotalLiquidityUsd).toBeNull();
     expect(alert.lpPriorTotalLiquidityUsd).toBeNull();
     expect(alert.lpTvlSource).toBeNull();

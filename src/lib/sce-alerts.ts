@@ -2,6 +2,14 @@
 // components or route handlers because they read SCE_ADMIN_API_KEY.
 // Browser-facing alert pages continue to use src/lib/api.ts.
 
+import { readAlertCollection, storeAlertCollection } from "./alert-cache";
+import {
+  alertDataError,
+  type AlertCollectionResult,
+  type AlertDataErrorCode,
+  type AlertDetailResult,
+} from "./alert-data-state";
+import { recordAlertRead } from "./alert-telemetry";
 import { stripTrailingSlash } from "./utils";
 
 export interface SceAlert {
@@ -453,61 +461,362 @@ function getSceBaseUrl(): string {
   );
 }
 
-function getSceAdminKey(): string {
+export class SceAlertsError extends Error {
+  constructor(
+    message: string,
+    readonly code: AlertDataErrorCode = "UPSTREAM_UNAVAILABLE",
+    readonly upstreamStatus: number | null = null,
+    readonly requestId: string | null = null,
+  ) {
+    super(message);
+  }
+}
+
+const SCE_REQUEST_TIMEOUT_MS = 20_000;
+
+const ALERTS_PATH = "/v1/sce/radar/alerts";
+
+type SceFetchOutcome =
+  | { ok: true; data: unknown; status: number; requestId: string | null; latencyMs: number }
+  | {
+      ok: false;
+      code: AlertDataErrorCode;
+      status: number | null;
+      requestId: string | null;
+      latencyMs: number;
+    };
+
+// Maps a completed upstream response to an error code. 404 is deliberately not
+// handled here: for a collection read it means route/deployment drift, and for a
+// detail read it means the record does not exist. Each caller decides.
+function classifyStatus(status: number): AlertDataErrorCode {
+  if (status === 401 || status === 403) return "UPSTREAM_UNAUTHORIZED";
+  if (status === 408 || status === 504) return "UPSTREAM_TIMEOUT";
+  if (status === 429) return "UPSTREAM_RATE_LIMITED";
+  return "UPSTREAM_UNAVAILABLE";
+}
+
+function classifyThrown(error: unknown): AlertDataErrorCode {
+  const name = error instanceof Error ? error.name : "";
+  return name === "TimeoutError" || name === "AbortError"
+    ? "UPSTREAM_TIMEOUT"
+    : "UPSTREAM_UNAVAILABLE";
+}
+
+/**
+ * Perform one SCE read and classify the result. Never throws, never returns a
+ * bare `null` that a caller could mistake for "no data": a failure is always an
+ * `ok: false` outcome carrying an explicit code.
+ */
+async function requestSce(path: string, query: URLSearchParams): Promise<SceFetchOutcome> {
+  const startedAt = Date.now();
   const adminKey = process.env.SCE_ADMIN_API_KEY;
   if (!adminKey) {
-    throw new SceAlertsError("SCE_ADMIN_API_KEY is not configured.");
+    return {
+      ok: false,
+      code: "CONFIGURATION_ERROR",
+      status: null,
+      requestId: null,
+      latencyMs: 0,
+    };
   }
-  return adminKey;
-}
 
-async function fetchSceJson(path: string, query: URLSearchParams, unavailableMessage: string) {
+  const queryString = query.toString();
   let res: Response;
   try {
-    res = await fetch(`${getSceBaseUrl()}${path}?${query.toString()}`, {
-      headers: { "X-SCE-Admin-Key": getSceAdminKey() },
+    res = await fetch(`${getSceBaseUrl()}${path}${queryString ? `?${queryString}` : ""}`, {
+      headers: { "X-SCE-Admin-Key": adminKey },
       cache: "no-store",
+      signal: AbortSignal.timeout(SCE_REQUEST_TIMEOUT_MS),
     });
-  } catch {
-    throw new SceAlertsError(unavailableMessage);
+  } catch (error) {
+    return {
+      ok: false,
+      code: classifyThrown(error),
+      status: null,
+      requestId: null,
+      latencyMs: Date.now() - startedAt,
+    };
   }
+
+  const requestId = res.headers?.get?.("x-request-id") ?? null;
 
   if (!res.ok) {
-    throw new SceAlertsError(`SCE request failed (${res.status}) for ${path}.`);
+    return {
+      ok: false,
+      code: res.status === 404 ? "CONFIGURATION_ERROR" : classifyStatus(res.status),
+      status: res.status,
+      requestId,
+      latencyMs: Date.now() - startedAt,
+    };
   }
 
-  return res.json().catch(() => null);
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    return {
+      ok: false,
+      code: "INVALID_UPSTREAM_RESPONSE",
+      status: res.status,
+      requestId,
+      latencyMs: Date.now() - startedAt,
+    };
+  }
+
+  return { ok: true, data, status: res.status, requestId, latencyMs: Date.now() - startedAt };
 }
 
-export class SceAlertsError extends Error {}
+// ── Payload validation ───────────────────────────────────────────────────────
 
-export async function fetchSceAlerts(options?: {
+/**
+ * A record must carry the canonical identifier, a status, a monitor type, and a
+ * parseable timestamp before Radar will call the collection containing it
+ * `available`. Anything less is an unexpected upstream shape, not an alert.
+ */
+function isValidRawAlert(value: unknown): value is Record<string, unknown> {
+  const raw = asRecord(value);
+  if (!raw) return false;
+  if (firstString(raw.id, raw.alertId) === null) return false;
+  if (firstString(raw.monitorType, raw.monitor_type) === null) return false;
+  if (firstString(raw.status, raw.state) === null) return false;
+  return (
+    normalizeDateString(firstString(raw.createdAt, raw.created_at, raw.timestamp)) !== null
+  );
+}
+
+/**
+ * Accepts the SCE alert-collection shape (a bare array) and returns sanitized
+ * alerts, or null when the payload is not a valid collection. A valid empty
+ * array returns an empty array — that is a real result, not a failure.
+ */
+export function validateSceAlertCollection(data: unknown): SceAlert[] | null {
+  if (!Array.isArray(data)) return null;
+  if (!data.every(isValidRawAlert)) return null;
+
+  const alerts = data.map((raw) => sanitizeAlert(raw as Record<string, unknown>));
+  return alerts.every((alert): alert is SceAlert => alert !== null) ? alerts : null;
+}
+
+export function validateSceAlertDetail(data: unknown): SceAlert | null {
+  return isValidRawAlert(data) ? sanitizeAlert(data) : null;
+}
+
+// ── Collection reads ─────────────────────────────────────────────────────────
+
+export interface SceAlertReadOptions {
   status?: string;
   limit?: number;
-}): Promise<SceAlert[]> {
-  const query = new URLSearchParams();
-  if (options?.status) query.set("status", options.status);
-  query.set("limit", String(options?.limit ?? 200));
-
-  const data = await fetchSceJson(
-    "/v1/sce/radar/alerts",
-    query,
-    "SCE alerts are unavailable.",
-  );
-  const rawAlerts = Array.isArray(data) ? data : [];
-
-  return (rawAlerts as Record<string, unknown>[]).map(sanitizeAlert).filter((alert): alert is SceAlert => alert !== null);
+  /** Radar-side surface performing the read; recorded in telemetry only. */
+  surface?: string;
 }
 
-export async function fetchSceAlertById(id: string): Promise<SceAlert | null> {
-  const data = await fetchSceJson(
-    `/v1/sce/radar/alerts/${encodeURIComponent(id)}`,
-    new URLSearchParams(),
-    "SCE alert detail is unavailable.",
-  );
+function collectionCacheKey(status: string | undefined, limit: number): string {
+  return `alerts:${status ?? "*"}:${limit}`;
+}
 
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  return sanitizeAlert(data as Record<string, unknown>);
+/**
+ * Build the failure half of the state machine: serve last-confirmed data as
+ * `degraded` when an acceptable cache entry exists, otherwise `unavailable`.
+ * Neither branch ever produces a confirmed-empty result.
+ */
+function degradedOrUnavailable<TAlert>(
+  cacheKey: string,
+  code: AlertDataErrorCode,
+  requestId: string | null,
+  now: Date,
+): AlertCollectionResult<TAlert> {
+  const error = alertDataError(code, requestId);
+  const cached = readAlertCollection<TAlert>(cacheKey, now);
+
+  if (cached) {
+    return {
+      state: "degraded",
+      alerts: cached.alerts,
+      source: "cache",
+      fetchedAt: now.toISOString(),
+      lastSuccessfulAt: cached.lastSuccessfulAt,
+      stale: true,
+      cacheAgeSeconds: cached.ageSeconds,
+      error,
+    };
+  }
+
+  return {
+    state: "unavailable",
+    alerts: [],
+    source: "sce",
+    fetchedAt: now.toISOString(),
+    error,
+  };
+}
+
+/**
+ * Read the SCE public alert collection as an explicit data state.
+ *
+ * This is the only supported entry point for alert-collection reads. It never
+ * returns a bare array, so a caller cannot accidentally render an upstream
+ * failure as "nothing is happening".
+ */
+export async function fetchSceAlertCollection(
+  options?: SceAlertReadOptions,
+): Promise<AlertCollectionResult<SceAlert>> {
+  const limit = options?.limit ?? 200;
+  const query = new URLSearchParams();
+  if (options?.status) query.set("status", options.status);
+  query.set("limit", String(limit));
+
+  const cacheKey = collectionCacheKey(options?.status, limit);
+  const outcome = await requestSce(ALERTS_PATH, query);
+  const now = new Date();
+
+  const result: AlertCollectionResult<SceAlert> = (() => {
+    if (!outcome.ok) {
+      return degradedOrUnavailable<SceAlert>(cacheKey, outcome.code, outcome.requestId, now);
+    }
+
+    const alerts = validateSceAlertCollection(outcome.data);
+    if (alerts === null) {
+      return degradedOrUnavailable<SceAlert>(
+        cacheKey,
+        "INVALID_UPSTREAM_RESPONSE",
+        outcome.requestId,
+        now,
+      );
+    }
+
+    storeAlertCollection(cacheKey, alerts, now);
+    return {
+      state: alerts.length > 0 ? "available" : "empty",
+      alerts,
+      source: "sce",
+      fetchedAt: now.toISOString(),
+      lastSuccessfulAt: now.toISOString(),
+    };
+  })();
+
+  recordAlertRead({
+    route: options?.surface ?? "unknown",
+    upstreamPath: ALERTS_PATH,
+    state: result.state,
+    upstreamStatus: outcome.ok ? outcome.status : outcome.status,
+    latencyMs: outcome.latencyMs,
+    alertCount: result.alerts.length,
+    source: result.source,
+    ...(typeof result.cacheAgeSeconds === "number"
+      ? { cacheAgeSeconds: result.cacheAgeSeconds }
+      : {}),
+    ...(result.error ? { errorCode: result.error.code } : {}),
+    ...(outcome.requestId ? { requestId: outcome.requestId } : {}),
+    ...(result.lastSuccessfulAt ? { lastSuccessfulAt: result.lastSuccessfulAt } : {}),
+  });
+
+  return result;
+}
+
+/**
+ * Read a single alert as an explicit data state.
+ *
+ * `not_found` is reserved for a successful upstream lookup that returned 404 or
+ * a null body. An outage produces `unavailable` or `degraded` — never
+ * `not_found` — so a public detail page can never render an SCE outage as
+ * "Alert not found".
+ */
+export async function fetchSceAlertDetail(id: string): Promise<AlertDetailResult<SceAlert>> {
+  const path = `${ALERTS_PATH}/${encodeURIComponent(id)}`;
+  const cacheKey = `alert:${id}`;
+  const outcome = await requestSce(path, new URLSearchParams());
+  const now = new Date();
+
+  const result: AlertDetailResult<SceAlert> = (() => {
+    if (!outcome.ok) {
+      // A 404 on a specific alert id is a confirmed "no such record", not the
+      // route drift that the same status means for the collection endpoint.
+      if (outcome.status === 404) {
+        return {
+          state: "not_found" as const,
+          alert: null,
+          source: "sce" as const,
+          fetchedAt: now.toISOString(),
+          lastSuccessfulAt: now.toISOString(),
+        };
+      }
+
+      const collection = degradedOrUnavailable<SceAlert>(
+        cacheKey,
+        outcome.code,
+        outcome.requestId,
+        now,
+      );
+      return {
+        state: collection.state === "degraded" ? ("degraded" as const) : ("unavailable" as const),
+        alert: collection.alerts[0] ?? null,
+        source: collection.source,
+        fetchedAt: collection.fetchedAt,
+        lastSuccessfulAt: collection.lastSuccessfulAt,
+        stale: collection.stale,
+        cacheAgeSeconds: collection.cacheAgeSeconds,
+        error: collection.error,
+      };
+    }
+
+    if (outcome.data === null || outcome.data === undefined) {
+      return {
+        state: "not_found" as const,
+        alert: null,
+        source: "sce" as const,
+        fetchedAt: now.toISOString(),
+        lastSuccessfulAt: now.toISOString(),
+      };
+    }
+
+    const alert = validateSceAlertDetail(outcome.data);
+    if (!alert) {
+      const collection = degradedOrUnavailable<SceAlert>(
+        cacheKey,
+        "INVALID_UPSTREAM_RESPONSE",
+        outcome.requestId,
+        now,
+      );
+      return {
+        state: collection.state === "degraded" ? ("degraded" as const) : ("unavailable" as const),
+        alert: collection.alerts[0] ?? null,
+        source: collection.source,
+        fetchedAt: collection.fetchedAt,
+        lastSuccessfulAt: collection.lastSuccessfulAt,
+        stale: collection.stale,
+        cacheAgeSeconds: collection.cacheAgeSeconds,
+        error: collection.error,
+      };
+    }
+
+    storeAlertCollection(cacheKey, [alert], now);
+    return {
+      state: "available" as const,
+      alert,
+      source: "sce" as const,
+      fetchedAt: now.toISOString(),
+      lastSuccessfulAt: now.toISOString(),
+    };
+  })();
+
+  recordAlertRead({
+    route: "public-alert-detail",
+    upstreamPath: `${ALERTS_PATH}/:alertId`,
+    state: result.state,
+    upstreamStatus: outcome.status,
+    latencyMs: outcome.latencyMs,
+    alertCount: result.alert ? 1 : 0,
+    source: result.source,
+    ...(typeof result.cacheAgeSeconds === "number"
+      ? { cacheAgeSeconds: result.cacheAgeSeconds }
+      : {}),
+    ...(result.error ? { errorCode: result.error.code } : {}),
+    ...(outcome.requestId ? { requestId: outcome.requestId } : {}),
+    ...(result.lastSuccessfulAt ? { lastSuccessfulAt: result.lastSuccessfulAt } : {}),
+  });
+
+  return result;
 }
 
 export async function fetchSceAlertLedger(options: {
@@ -541,11 +850,16 @@ export async function fetchSceAlertLedgerPage(options: {
   if (options.status) query.set("status", options.status);
   if (options.signalClass) query.set("signalClass", options.signalClass);
 
-  const data = await fetchSceJson(
-    "/v1/sce/radar/alert-ledger",
-    query,
-    "SCE alert ledger is unavailable.",
-  );
+  const outcome = await requestSce("/v1/sce/radar/alert-ledger", query);
+  if (!outcome.ok) {
+    throw new SceAlertsError(
+      "SCE alert ledger is unavailable.",
+      outcome.code,
+      outcome.status,
+      outcome.requestId,
+    );
+  }
+  const { data } = outcome;
   const rawEvents =
     Array.isArray(data)
       ? data
@@ -553,7 +867,16 @@ export async function fetchSceAlertLedgerPage(options: {
         ? (data as { events: unknown[] }).events
         : typeof data === "object" && data !== null && Array.isArray((data as { alerts?: unknown }).alerts)
         ? (data as { alerts: unknown[] }).alerts
-        : [];
+        : null;
+  // A shape Radar does not recognise is an upstream failure, not an empty page.
+  if (rawEvents === null) {
+    throw new SceAlertsError(
+      "SCE alert ledger returned an unexpected response shape.",
+      "INVALID_UPSTREAM_RESPONSE",
+      outcome.status,
+      outcome.requestId,
+    );
+  }
   const events = (rawEvents as Record<string, unknown>[])
     .map(sanitizeLedgerEvent)
     .filter((event): event is SceAlertLedgerEvent => event !== null);

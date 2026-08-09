@@ -5,7 +5,7 @@ vi.mock("@/lib/auth0", () => ({ auth0: { getSession: vi.fn() } }));
 vi.mock("@/lib/sce-alerts", () => ({
   SceAlertsError: class SceAlertsError extends Error {},
   fetchSceAlertLedgerPage: vi.fn(),
-  fetchSceAlerts: vi.fn(),
+  fetchSceAlertCollection: vi.fn(),
 }));
 vi.mock("@/lib/radar-api-backend", () => ({
   bootstrapRadarAccount: vi.fn(),
@@ -13,7 +13,19 @@ vi.mock("@/lib/radar-api-backend", () => ({
 
 import { auth0 } from "@/lib/auth0";
 import { bootstrapRadarAccount } from "@/lib/radar-api-backend";
-import { fetchSceAlertLedgerPage, fetchSceAlerts } from "@/lib/sce-alerts";
+import { fetchSceAlertCollection, fetchSceAlertLedgerPage } from "@/lib/sce-alerts";
+import type { AlertCollectionResult } from "@/lib/alert-data-state";
+import type { SceAlert } from "@/lib/sce-alerts";
+
+function availableCollection(alerts: unknown[]): AlertCollectionResult<SceAlert> {
+  return {
+    state: alerts.length > 0 ? "available" : "empty",
+    alerts: alerts as SceAlert[],
+    source: "sce",
+    fetchedAt: "2026-08-09T12:00:00.000Z",
+    lastSuccessfulAt: "2026-08-09T12:00:00.000Z",
+  };
+}
 import { GET } from "./route";
 
 describe("alerts route", () => {
@@ -32,7 +44,7 @@ describe("alerts route", () => {
   it("preserves lifecycle and object fields from the SCE payload", async () => {
     vi.mocked(auth0.getSession).mockResolvedValue({ user: { sub: "auth0|1" } } as never);
     vi.mocked(bootstrapRadarAccount).mockResolvedValue({ plan: "radar_signal", isAdmin: false } as never);
-    vi.mocked(fetchSceAlerts).mockResolvedValue([
+    vi.mocked(fetchSceAlertCollection).mockResolvedValue(availableCollection([
       {
         id: "alert-1",
         monitorType: "lp",
@@ -72,13 +84,14 @@ describe("alerts route", () => {
         evidenceState: "complete_observed_evidence",
         publicVerificationState: "verified_public_alert",
       },
-    ] as never);
+    ] as never));
 
     const response = await GET(new NextRequest("http://localhost/api/alerts"));
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({
+    expect(body).toMatchObject({
+      state: "available",
       alerts: [
         expect.objectContaining({
           id: "alert-1",
@@ -128,7 +141,7 @@ describe("alerts route", () => {
   it("lets Intel accounts load aggregate history without a private-history cutoff", async () => {
     vi.mocked(auth0.getSession).mockResolvedValue({ user: { sub: "auth0|1" } } as never);
     vi.mocked(bootstrapRadarAccount).mockResolvedValue({ plan: "radar_intel", isAdmin: false } as never);
-    vi.mocked(fetchSceAlerts).mockResolvedValue([
+    vi.mocked(fetchSceAlertCollection).mockResolvedValue(availableCollection([
       {
         id: "alert-old",
         monitorType: "oracle",
@@ -143,13 +156,14 @@ describe("alerts route", () => {
         openedAt: "2026-01-01T00:00:00.000Z",
         resolvedAt: "2026-01-02T00:00:00.000Z",
       },
-    ] as never);
+    ] as never));
 
     const response = await GET(new NextRequest("http://localhost/api/alerts"));
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({
+    expect(body).toMatchObject({
+      state: "available",
       alerts: [
         expect.objectContaining({
           id: "alert-old",
@@ -225,7 +239,8 @@ describe("alerts route", () => {
 
     expect(response.status).toBe(200);
     expect(fetchSceAlertLedgerPage).toHaveBeenCalled();
-    expect(body).toEqual({
+    expect(body).toMatchObject({
+      state: "available",
       alerts: [
         expect.objectContaining({
           id: "alert-source-1",

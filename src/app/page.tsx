@@ -11,7 +11,13 @@ import {
   isSupersededAlertStatus,
 } from "@/lib/alert-status";
 import { toPublicRadarAlert, type PublicRadarAlert } from "@/lib/public-alerts";
-import { fetchSceAlerts } from "@/lib/sce-alerts";
+import {
+  ALERT_EMPTY_HEADLINE,
+  ALERT_UNAVAILABLE_HEADLINE,
+  mapAlertCollection,
+  type AlertCollectionResult,
+} from "@/lib/alert-data-state";
+import { fetchSceAlertCollection } from "@/lib/sce-alerts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -47,18 +53,9 @@ const SEV_TEXT: Record<string, string> = {
   info: "text-purple-400",
 };
 
-const signals = [
-  { sev: "watch", msg: "Chainlink ETH/USD deviation watch", src: "oracle", age: "2m ago" },
-  { sev: "warning", msg: "Wormhole route latency elevated", src: "bridge", age: "7m ago" },
-  { sev: "watch", msg: "Curve pool imbalance detected", src: "lp", age: "12m ago" },
-  { sev: "warning", msg: "Across route pressure increased", src: "bridge", age: "18m ago" },
-  { sev: "info", msg: "Daily briefing generated · 08:00 UTC", src: "system", age: "1h ago" },
-  { sev: "critical", msg: "Chronicle WBTC/USD deviation threshold hit", src: "oracle", age: "45m ago" },
-  { sev: "watch", msg: "LayerZero route congestion detected", src: "bridge", age: "31m ago" },
-  { sev: "info", msg: "Pyth SOL/USD heartbeat nominal", src: "oracle", age: "4m ago" },
-  { sev: "warning", msg: "Uniswap v3 ETH/USDC depth dropped 22%", src: "lp", age: "53m ago" },
-  { sev: "watch", msg: "RedStone BTC/USD freshness within threshold", src: "oracle", age: "9m ago" },
-];
+// The marquee is driven entirely by confirmed SCE reads. There is deliberately
+// no placeholder signal list: a sample row in a feed labelled "Latest alerts"
+// is indistinguishable from a real one.
 
 // ── Features ─────────────────────────────────────────────────────────────────
 
@@ -209,40 +206,75 @@ function formatLandingAlertSource(alert: PublicRadarAlert): string {
   return "public record";
 }
 
-async function loadLandingFeed(): Promise<LandingFeedItem[]> {
-  const alerts = await fetchSceAlerts({ limit: LANDING_ALERT_LIMIT }).catch(() => []);
+/**
+ * Build the marquee from an explicit data state.
+ *
+ * The marquee is labelled "Latest alerts", so it must not be filled with
+ * placeholder rows when Radar has nothing confirmed to show: a reader cannot
+ * tell fabricated calm from measured calm. Each non-available state gets one
+ * honest row instead.
+ */
+function landingFeedFromResult(
+  result: AlertCollectionResult<PublicRadarAlert>,
+): LandingFeedItem[] {
+  if (result.state === "unavailable") {
+    return [
+      {
+        id: "state-unavailable",
+        href: "/alerts",
+        sev: "info",
+        msg: ALERT_UNAVAILABLE_HEADLINE,
+        src: "radar",
+        age: "now",
+      },
+    ];
+  }
 
-  return alerts
-    .map(toPublicRadarAlert)
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, LANDING_ALERT_LIMIT)
-    .map((alert) => ({
-      id: alert.id,
-      href: `/alerts/${alert.id}`,
-      sev: toLandingFeedSeverity(alert.severity),
-      msg: formatLandingAlertMessage(alert),
-      src: formatLandingAlertSource(alert),
-      age: formatLandingAlertAge(alert.updatedAt),
-    }));
+  if (result.state === "empty") {
+    return [
+      {
+        id: "state-empty",
+        href: "/alerts",
+        sev: "info",
+        msg: ALERT_EMPTY_HEADLINE,
+        src: "public record",
+        age: formatLandingAlertAge(result.fetchedAt),
+      },
+    ];
+  }
+
+  const stalePrefix = result.state === "degraded" ? "Last confirmed: " : "";
+  return result.alerts.map((alert) => ({
+    id: alert.id,
+    href: `/alerts/${alert.id}`,
+    sev: toLandingFeedSeverity(alert.severity),
+    msg: `${stalePrefix}${formatLandingAlertMessage(alert)}`,
+    src: formatLandingAlertSource(alert),
+    age: formatLandingAlertAge(alert.updatedAt),
+  }));
+}
+
+async function loadLandingFeed(): Promise<AlertCollectionResult<PublicRadarAlert>> {
+  const collection = await fetchSceAlertCollection({
+    limit: LANDING_ALERT_LIMIT,
+    surface: "landing-page",
+  });
+
+  return mapAlertCollection(collection, (alerts) =>
+    alerts
+      .map(toPublicRadarAlert)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, LANDING_ALERT_LIMIT),
+  );
 }
 
 export default async function LandingPage() {
-  const [monitoredUsdValue, liveFeed] = await Promise.all([
+  const [monitoredUsdValue, feedResult] = await Promise.all([
     getMonitoredValueUsd(),
     loadLandingFeed(),
   ]);
   const monitoredUsd = formatUsd(monitoredUsdValue);
-  const feedItems: LandingFeedItem[] =
-    liveFeed.length > 0
-      ? liveFeed
-      : signals.map((signal, index) => ({
-          id: `sample-${index}`,
-          href: "/alerts",
-          sev: toLandingFeedSeverity(signal.sev),
-          msg: signal.msg,
-          src: signal.src,
-          age: signal.age,
-        }));
+  const feedItems = landingFeedFromResult(feedResult);
   return (
     <div className="flex min-h-screen flex-col">
       <Nav />

@@ -125,7 +125,35 @@ function normalizeAlertPage(payload: RadarAlert[] | RadarAlertPage): RadarAlertP
       ? Math.max(0, Math.trunc(payload.pageCount))
       : alerts.length;
 
-  return { alerts, count, pageCount };
+  return {
+    alerts,
+    count,
+    pageCount,
+    ...(payload.state ? { state: payload.state } : {}),
+    ...(payload.source ? { source: payload.source } : {}),
+    ...(payload.fetchedAt ? { fetchedAt: payload.fetchedAt } : {}),
+    ...(payload.lastSuccessfulAt ? { lastSuccessfulAt: payload.lastSuccessfulAt } : {}),
+    ...(payload.stale ? { stale: true } : {}),
+    ...(typeof payload.cacheAgeSeconds === "number"
+      ? { cacheAgeSeconds: payload.cacheAgeSeconds }
+      : {}),
+    ...(payload.error ? { error: payload.error } : {}),
+  };
+}
+
+/**
+ * `/api/alerts` answers an upstream failure with a non-2xx status carrying an
+ * alert envelope. Surface that envelope as an unavailable page rather than a
+ * thrown error, so callers cannot fall back to a stale empty list. Anything
+ * else — 401, 403, 500 — still throws.
+ */
+function alertPageFromError(error: unknown): RadarAlertPage | null {
+  if (!(error instanceof ApiError)) return null;
+  const detail = error.detail;
+  if (typeof detail !== "object" || detail === null) return null;
+  const state = (detail as { state?: unknown }).state;
+  if (state !== "unavailable" && state !== "degraded") return null;
+  return normalizeAlertPage(detail as RadarAlertPage);
 }
 
 export async function listAlertPage(params?: ListAlertsParams): Promise<RadarAlertPage> {
@@ -137,11 +165,17 @@ export async function listAlertPage(params?: ListAlertsParams): Promise<RadarAle
   if (params?.historyMode) query.set("history_mode", params.historyMode);
   if (params?.window) query.set("window", params.window);
   const qs = query.toString();
-  const payload = await requestSameOrigin<RadarAlert[] | RadarAlertPage>(
-    `/api/alerts${qs ? `?${qs}` : ""}`,
-    { cache: "no-store" },
-  );
-  return normalizeAlertPage(payload);
+  try {
+    const payload = await requestSameOrigin<RadarAlert[] | RadarAlertPage>(
+      `/api/alerts${qs ? `?${qs}` : ""}`,
+      { cache: "no-store" },
+    );
+    return normalizeAlertPage(payload);
+  } catch (error) {
+    const page = alertPageFromError(error);
+    if (page) return page;
+    throw error;
+  }
 }
 
 export async function listAlerts(params?: ListAlertsParams): Promise<RadarAlert[]> {

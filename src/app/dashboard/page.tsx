@@ -20,6 +20,12 @@ import { buildProviderReliabilityRowsWithOptions } from "@/lib/intel-analytics";
 import { filterLedgerAlertsByWindow } from "@/lib/radar-ledger";
 import { useRadarLedgerHistory } from "@/lib/radar-ledger-context";
 import { formatAlertLifecycle } from "@/lib/alert-time";
+import {
+  formatAlertCount,
+  isMeasuredAlertCount,
+  UNMEASURED_COUNT_PLACEHOLDER,
+} from "@/lib/alert-data-state";
+import { AlertDataStateNotice } from "@/components/alert-data-state-notice";
 import type { RadarAlert, RadarStatus } from "@/lib/api-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -95,7 +101,16 @@ function summarizeIntelProviderHealth(alerts: RadarAlert[]): ProviderHealthState
 
 export default function DashboardPage() {
   const { account } = useAccount();
-  const { snapshotPage, ledgerPage, catalog, loading, loaded, error } = useRadarLedgerHistory();
+  const {
+    snapshotPage,
+    ledgerPage,
+    catalog,
+    catalogAvailable,
+    alertDataState,
+    loading,
+    loaded,
+    error,
+  } = useRadarLedgerHistory();
   const resolvedPlan = resolvePlan(account.plan, account.isAdmin, account.adminViewPlan);
   const dashboardHistoryDays = getDashboardAlertHistoryDays(
     account.plan,
@@ -103,6 +118,10 @@ export default function DashboardPage() {
     account.adminViewPlan,
   );
   const isIntelView = resolvedPlan === "radar_intel";
+  const activeAlertPage = isIntelView ? ledgerPage : snapshotPage;
+  // Zero is only shown when zero was actually measured. An unreachable alert
+  // source renders a placeholder instead, so an outage never reads as "all clear".
+  const alertsMeasured = isMeasuredAlertCount(alertDataState);
   const overviewAlerts = isIntelView
     ? collapseAlertsToLatestState(ledgerPage.alerts)
     : snapshotPage.alerts;
@@ -134,6 +153,8 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      <AlertDataStateNotice page={activeAlertPage} />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
@@ -142,11 +163,16 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{totalActiveAlerts}</div>
+            <div className="text-3xl font-bold">
+              {formatAlertCount(totalActiveAlerts, alertDataState)}
+            </div>
             <div className="mt-1 flex gap-2">
-              {criticalCount > 0 && <span className="text-xs text-red-500">{criticalCount} critical</span>}
-              {warningCount > 0 && <span className="text-xs text-orange-500">{warningCount} warning</span>}
-              {watchCount > 0 && <span className="text-xs text-blue-500">{watchCount} watch</span>}
+              {!alertsMeasured && (
+                <span className="text-xs text-muted-foreground">not measured</span>
+              )}
+              {alertsMeasured && criticalCount > 0 && <span className="text-xs text-red-500">{criticalCount} critical</span>}
+              {alertsMeasured && warningCount > 0 && <span className="text-xs text-orange-500">{warningCount} warning</span>}
+              {alertsMeasured && watchCount > 0 && <span className="text-xs text-blue-500">{watchCount} watch</span>}
             </div>
           </CardContent>
         </Card>
@@ -179,12 +205,16 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div className="text-3xl font-bold">
-                  {`${observability.observableObjects}/${observability.totalObjects}`}
+                  {alertsMeasured && catalogAvailable
+                    ? `${observability.observableObjects}/${observability.totalObjects}`
+                    : UNMEASURED_COUNT_PLACEHOLDER}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {`${observability.activeCoverageGaps} active coverage gap${
-                    observability.activeCoverageGaps === 1 ? "" : "s"
-                  }`}
+                  {alertsMeasured && catalogAvailable
+                    ? `${observability.activeCoverageGaps} active coverage gap${
+                        observability.activeCoverageGaps === 1 ? "" : "s"
+                      }`
+                    : "Coverage cannot be measured right now"}
                 </div>
               </>
             )}
@@ -318,7 +348,9 @@ export default function DashboardPage() {
         {recentActivity.length === 0 ? (
           <Card className="border-border/60">
             <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              No alert activity is visible in your current history window.
+              {alertsMeasured
+                ? "No alert activity is visible in your current history window."
+                : "Radar cannot retrieve alert activity right now. This is not a confirmation that there is none."}
             </CardContent>
           </Card>
         ) : (

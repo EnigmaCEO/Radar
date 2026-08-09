@@ -12,6 +12,11 @@ import type {
   RadarStatus,
 } from "@/lib/api-types";
 import { useAccount } from "@/lib/account-context";
+import {
+  isMeasuredAlertCount,
+  UNMEASURED_COUNT_PLACEHOLDER,
+} from "@/lib/alert-data-state";
+import { AlertDataStateNotice } from "@/components/alert-data-state-notice";
 import { useRadarLedgerHistory } from "@/lib/radar-ledger-context";
 import {
   coverageGapBadgeLabel,
@@ -58,6 +63,17 @@ const DEFAULT_ALERT_PAGE: RadarAlertPage = {
   alerts: [],
   count: 0,
   pageCount: 0,
+};
+
+// Replaces the page after a failed read so an outage cannot be rendered as a
+// confirmed empty result.
+const UNAVAILABLE_ALERT_PAGE: RadarAlertPage = {
+  alerts: [],
+  count: 0,
+  pageCount: 0,
+  state: "unavailable",
+  source: "sce",
+  error: { code: "UPSTREAM_UNAVAILABLE", retryable: true },
 };
 
 const AGGREGATE_WINDOW_MS: Record<Exclude<AggregateWindow, "all">, number> = {
@@ -1084,11 +1100,15 @@ function latestCoverageSeenAt(alerts: RadarAlert[]): string | null {
 function SummaryMetricCard({
   title,
   value,
+  measured = true,
 }: {
   title: string;
   value: string | number;
+  /** When false the metric was never measured, so a number would be a false claim. */
+  measured?: boolean;
 }) {
-  const isLongValue = typeof value === "string" && value.length > 18;
+  const displayValue = measured ? value : UNMEASURED_COUNT_PLACEHOLDER;
+  const isLongValue = typeof displayValue === "string" && displayValue.length > 18;
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -1096,7 +1116,7 @@ function SummaryMetricCard({
       </CardHeader>
       <CardContent>
         <div className={isLongValue ? "text-sm font-semibold leading-6" : "text-3xl font-bold"}>
-          {value}
+          {displayValue}
         </div>
       </CardContent>
     </Card>
@@ -1928,6 +1948,9 @@ export default function AlertsPage() {
       });
     } catch (error) {
       console.error(error);
+      // Never leave the previous (or initial empty) page in place after a
+      // failure — that would render as a measured "no alerts" result.
+      setAlertPage(UNAVAILABLE_ALERT_PAGE);
     } finally {
       setLoading(false);
     }
@@ -1960,6 +1983,7 @@ export default function AlertsPage() {
         }
       } catch (error) {
         console.error(error);
+        if (!cancelled) setAlertPage(UNAVAILABLE_ALERT_PAGE);
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -2017,13 +2041,16 @@ export default function AlertsPage() {
           ? intelAggregation.byType
           : intelAggregation.byObject;
   const pageLoading = isIntelView ? bootstrapLoading || !bootstrapLoaded : loading;
+  const activeAlertPage = isIntelView ? ledgerPage : alertPage;
+  const alertsMeasured = isMeasuredAlertCount(activeAlertPage.state);
 
   if (isIntelView && bootstrapError) {
     return <div className="text-sm text-muted-foreground">{bootstrapError}</div>;
   }
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-5xl space-y-6" data-alert-state={activeAlertPage.state ?? "unavailable"}>
+      <AlertDataStateNotice page={activeAlertPage} />
       <div className="flex items-center justify-between">
         {isIntelView ? (
           <div className="space-y-3">
@@ -2058,23 +2085,24 @@ export default function AlertsPage() {
 
       {isIntelView ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          <SummaryMetricCard title="Ledger events loaded" value={ledgerRowsLoaded} />
-          <SummaryMetricCard title="Correlated findings" value={totalFindings} />
-          <SummaryMetricCard title="Active findings" value={activeAlerts} />
-          <SummaryMetricCard title="Resolved findings" value={resolvedAlerts} />
-          <SummaryMetricCard title="Critical findings" value={criticalAlerts} />
-          <SummaryMetricCard title="Coverage incidents" value={coverageIncidents} />
+          <SummaryMetricCard title="Ledger events loaded" value={ledgerRowsLoaded} measured={alertsMeasured} />
+          <SummaryMetricCard title="Correlated findings" value={totalFindings} measured={alertsMeasured} />
+          <SummaryMetricCard title="Active findings" value={activeAlerts} measured={alertsMeasured} />
+          <SummaryMetricCard title="Resolved findings" value={resolvedAlerts} measured={alertsMeasured} />
+          <SummaryMetricCard title="Critical findings" value={criticalAlerts} measured={alertsMeasured} />
+          <SummaryMetricCard title="Coverage incidents" value={coverageIncidents} measured={alertsMeasured} />
           <SummaryMetricCard
             title="Median resolution time"
             value={intelSummary?.medianResolutionTimeLabel ?? "Not enough resolved data"}
+            measured={alertsMeasured}
           />
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryMetricCard title="Active alerts" value={activeAlerts} />
-          <SummaryMetricCard title="Resolved alerts" value={resolvedAlerts} />
-          <SummaryMetricCard title="Critical alerts" value={criticalAlerts} />
-          <SummaryMetricCard title="Coverage incidents" value={coverageIncidents} />
+          <SummaryMetricCard title="Active alerts" value={activeAlerts} measured={alertsMeasured} />
+          <SummaryMetricCard title="Resolved alerts" value={resolvedAlerts} measured={alertsMeasured} />
+          <SummaryMetricCard title="Critical alerts" value={criticalAlerts} measured={alertsMeasured} />
+          <SummaryMetricCard title="Coverage incidents" value={coverageIncidents} measured={alertsMeasured} />
         </div>
       )}
 

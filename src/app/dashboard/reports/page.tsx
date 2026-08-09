@@ -22,6 +22,7 @@ import {
   type ProviderReliabilityRow,
 } from "@/lib/intel-analytics";
 import { useRadarLedgerHistory } from "@/lib/radar-ledger-context";
+import { AlertDataStateNotice } from "@/components/alert-data-state-notice";
 import {
   filterLedgerAlertsByWindow,
   RADAR_LEDGER_WINDOW_OPTIONS,
@@ -760,7 +761,8 @@ export default function ReportsPage() {
   if (error) return <div className="text-sm text-muted-foreground">{error}</div>;
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="max-w-7xl space-y-6" data-alert-state={page.state ?? "unavailable"}>
+      <AlertDataStateNotice page={page} />
       <div className="space-y-2">
         <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">

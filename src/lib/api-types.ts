@@ -1,5 +1,7 @@
 // Types mirroring the SCE backend models (camelCase as returned by the API)
 
+import type { AlertDataError, AlertDataState } from "./alert-data-state";
+
 export type RadarMonitorType = "oracle" | "bridge" | "governance" | "sce_heartbeat" | "dependency" | "lp";
 export type RadarSeverity = "watch" | "warning" | "critical";
 export type RadarStatus = "active" | "resolved" | "superseded" | "disabled";
@@ -96,10 +98,26 @@ export interface RadarAlert {
   resolvedAt?: string;
 }
 
+/**
+ * A page of alerts plus the data state that produced it.
+ *
+ * The state fields are optional so the shape stays backward compatible with
+ * consumers written before the data-state model existed, but every first-party
+ * producer now populates them. A consumer that ignores `state` will still read
+ * `alerts` correctly; a consumer that reads `state` can tell a confirmed empty
+ * page from an unavailable one.
+ */
 export interface RadarAlertPage {
   alerts: RadarAlert[];
   count: number;
   pageCount: number;
+  state?: AlertDataState;
+  source?: "sce" | "cache";
+  fetchedAt?: string;
+  lastSuccessfulAt?: string;
+  stale?: boolean;
+  cacheAgeSeconds?: number;
+  error?: AlertDataError;
 }
 
 export interface RadarObservabilitySummary {

@@ -10,6 +10,7 @@ import {
   type ProviderReliabilityRow,
 } from "@/lib/intel-analytics";
 import { useRadarLedgerHistory } from "@/lib/radar-ledger-context";
+import { AlertDataStateNotice } from "@/components/alert-data-state-notice";
 import { filterLedgerAlertsByWindow } from "@/lib/radar-ledger";
 import { getProviderBrand } from "@/lib/provider-branding";
 import { getPlanLabel } from "@/lib/plan-limits";
@@ -361,10 +362,13 @@ export default function ProviderReliabilityPage() {
   });
 
   return (
-    <ProviderReliabilityView
-      loading={loading || !loaded}
-      planLabel={getPlanLabel(account.plan, account.isAdmin, account.adminViewPlan)}
-      rows={rows}
-    />
+    <div className="space-y-6" data-alert-state={page.state ?? "unavailable"}>
+      <AlertDataStateNotice page={page} />
+      <ProviderReliabilityView
+        loading={loading || !loaded}
+        planLabel={getPlanLabel(account.plan, account.isAdmin, account.adminViewPlan)}
+        rows={rows}
+      />
+    </div>
   );
 }

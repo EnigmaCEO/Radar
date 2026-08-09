@@ -5,7 +5,14 @@ import type {
   RadarStatus,
 } from "@/lib/api-types";
 import {
+  alertDataError,
+  type AlertCollectionResult,
+  type AlertDataErrorCode,
+} from "@/lib/alert-data-state";
+import { recordAlertRead } from "@/lib/alert-telemetry";
+import {
   fetchSceAlertLedgerPage,
+  SceAlertsError,
   type SceAlert,
   type SceAlertLedgerEvent,
 } from "@/lib/sce-alerts";
@@ -197,40 +204,102 @@ export function windowStartForLedger(options: {
   return new Date(effectiveCutoff).toISOString();
 }
 
+export interface LedgerHistoryResult extends AlertCollectionResult<SceAlertLedgerEvent> {
+  /** Total matching events reported upstream, which may exceed the page. */
+  count: number;
+}
+
+/**
+ * Page through the SCE alert ledger and report the read as an explicit data
+ * state.
+ *
+ * Unlike the alert collection there is no last-known-good cache here: a ledger
+ * window is request-specific, so a cached window could not honestly stand in for
+ * a different one. The ledger therefore resolves to `available`, `empty`, or
+ * `unavailable` only — it never degrades a failure into an empty history.
+ */
 export async function fetchLedgerHistory(options: {
   since: string;
   until: string;
   limit: number;
   monitorType?: string;
   status?: string;
-}): Promise<{ events: SceAlertLedgerEvent[]; count: number }> {
+  surface?: string;
+}): Promise<LedgerHistoryResult> {
   const events: SceAlertLedgerEvent[] = [];
+  const startedAt = Date.now();
   let count = 0;
   let after: string | undefined;
 
-  while (events.length < options.limit) {
-    const remaining = options.limit - events.length;
-    const pageLimit = Math.min(remaining, 200);
-    const page = await fetchSceAlertLedgerPage({
-      since: options.since,
-      until: options.until,
-      limit: pageLimit,
-      after,
-      monitorType: options.monitorType,
-      status: options.status,
+  try {
+    while (events.length < options.limit) {
+      const remaining = options.limit - events.length;
+      const pageLimit = Math.min(remaining, 200);
+      const page = await fetchSceAlertLedgerPage({
+        since: options.since,
+        until: options.until,
+        limit: pageLimit,
+        after,
+        monitorType: options.monitorType,
+        status: options.status,
+      });
+      count = Math.max(count, page.count);
+
+      if (page.events.length === 0) break;
+      events.push(...page.events);
+
+      const nextCursor = page.events[page.events.length - 1]?.cursor ?? undefined;
+      if (!nextCursor || page.events.length < pageLimit) break;
+      after = nextCursor;
+    }
+  } catch (error) {
+    const code: AlertDataErrorCode =
+      error instanceof SceAlertsError ? error.code : "UPSTREAM_UNAVAILABLE";
+    const requestId = error instanceof SceAlertsError ? error.requestId : null;
+    const fetchedAt = new Date().toISOString();
+
+    recordAlertRead({
+      route: options.surface ?? "unknown",
+      upstreamPath: "/v1/sce/radar/alert-ledger",
+      state: "unavailable",
+      upstreamStatus: error instanceof SceAlertsError ? error.upstreamStatus : null,
+      latencyMs: Date.now() - startedAt,
+      alertCount: 0,
+      source: "sce",
+      errorCode: code,
+      ...(requestId ? { requestId } : {}),
     });
-    count = Math.max(count, page.count);
 
-    if (page.events.length === 0) break;
-    events.push(...page.events);
-
-    const nextCursor = page.events[page.events.length - 1]?.cursor ?? undefined;
-    if (!nextCursor || page.events.length < pageLimit) break;
-    after = nextCursor;
+    return {
+      state: "unavailable",
+      alerts: [],
+      count: 0,
+      source: "sce",
+      fetchedAt,
+      error: alertDataError(code, requestId),
+    };
   }
 
+  const visibleEvents = events.slice(0, options.limit);
+  const fetchedAt = new Date().toISOString();
+
+  recordAlertRead({
+    route: options.surface ?? "unknown",
+    upstreamPath: "/v1/sce/radar/alert-ledger",
+    state: visibleEvents.length > 0 ? "available" : "empty",
+    upstreamStatus: 200,
+    latencyMs: Date.now() - startedAt,
+    alertCount: visibleEvents.length,
+    source: "sce",
+    lastSuccessfulAt: fetchedAt,
+  });
+
   return {
-    events: events.slice(0, options.limit),
-    count: Math.max(count, events.length),
+    state: visibleEvents.length > 0 ? "available" : "empty",
+    alerts: visibleEvents,
+    count: Math.max(count, visibleEvents.length),
+    source: "sce",
+    fetchedAt,
+    lastSuccessfulAt: fetchedAt,
   };
 }

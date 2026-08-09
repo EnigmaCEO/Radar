@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { buildInfrastructureHealthSummary, type InfrastructureHealthSummary, type IntelSummaryBucket } from "@/lib/intel-analytics";
 import { useRadarLedgerHistory } from "@/lib/radar-ledger-context";
+import { AlertDataStateNotice } from "@/components/alert-data-state-notice";
 import { RADAR_LEDGER_WINDOW_OPTIONS, type RadarLedgerWindow } from "@/lib/radar-ledger";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -367,7 +368,8 @@ export default function InfrastructureHealthPage() {
   if (error) return <div className="text-sm text-muted-foreground">{error}</div>;
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-5xl space-y-6" data-alert-state={page.state ?? "unavailable"}>
+      <AlertDataStateNotice page={page} />
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Infrastructure health trends</h1>

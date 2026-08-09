@@ -22,7 +22,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LocalDateTime } from "@/components/local-time";
-import { fetchSceAlertById } from "@/lib/sce-alerts";
+import { fetchSceAlertDetail } from "@/lib/sce-alerts";
+import {
+  AlertDetailDegradedNotice,
+  AlertDetailUnavailableView,
+} from "../alerts-view";
 import { formatAlertLifecycle, formatDurationBetween } from "@/lib/alert-time";
 
 export const dynamic = "force-dynamic";
@@ -107,12 +111,28 @@ export default async function PublicAlertDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const alert = await fetchSceAlertById(id).catch(() => null);
+  const detail = await fetchSceAlertDetail(id);
 
-  if (!alert) {
+  // A successful lookup for an unknown id is a 404. An SCE outage is not: it
+  // renders as an availability state so a reader is never told the alert does
+  // not exist when Radar simply could not check.
+  if (detail.state === "not_found") {
     notFound();
   }
 
+  if (detail.state === "unavailable" || detail.alert === null) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <Nav />
+        <main className="flex-1 py-10">
+          <AlertDetailUnavailableView fetchedAt={detail.fetchedAt} />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  const alert = detail.alert;
   const publicAlert = toPublicRadarAlert(alert);
   const evidenceDetails = extractAlertEvidenceDetails(publicAlert.evidenceExplanation);
   const session = await auth0.getSession();
@@ -168,7 +188,16 @@ export default async function PublicAlertDetailPage({
     <div className="flex min-h-screen flex-col bg-background">
       <Nav />
       <main className="flex-1 py-10">
-        <div className="mx-auto max-w-4xl space-y-6 px-4 sm:px-6">
+        <div
+          className="mx-auto max-w-4xl space-y-6 px-4 sm:px-6"
+          data-alert-state={detail.state}
+        >
+          {detail.state === "degraded" && (
+            <AlertDetailDegradedNotice
+              lastSuccessfulAt={detail.lastSuccessfulAt}
+              cacheAgeSeconds={detail.cacheAgeSeconds}
+            />
+          )}
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               {isCoverageGap ? (
