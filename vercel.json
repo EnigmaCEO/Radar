@@ -6,6 +6,12 @@
   "regions": ["sin1"],
   "headers": [
     {
+      "source": "/",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "https://www.sagitta.systems" }
+      ]
+    },
+    {
       "source": "/api/stripe/webhook",
       "headers": [
         { "key": "Cache-Control", "value": "no-store" }

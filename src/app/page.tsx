@@ -17,7 +17,7 @@ import {
   mapAlertCollection,
   type AlertCollectionResult,
 } from "@/lib/alert-data-state";
-import { fetchSceAlertCollection } from "@/lib/sce-alerts";
+import { fetchLandingAlertCollection } from "@/lib/landing-feed-snapshot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -255,10 +255,10 @@ function landingFeedFromResult(
 }
 
 async function loadLandingFeed(): Promise<AlertCollectionResult<PublicRadarAlert>> {
-  const collection = await fetchSceAlertCollection({
-    limit: LANDING_ALERT_LIMIT,
-    surface: "landing-page",
-  });
+  // After the first confirmed read, served from the stored snapshot while a
+  // refresh runs in the background, so the hero no longer waits on SCE or
+  // shows a false outage when a refresh fails.
+  const collection = await fetchLandingAlertCollection(LANDING_ALERT_LIMIT);
 
   return mapAlertCollection(collection, (alerts) =>
     alerts
