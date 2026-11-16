@@ -107,3 +107,25 @@ export function buildMonitorCtaHref(isAuthenticated: boolean, objectId: string |
   });
   return `/auth/login?${params.toString()}`;
 }
+
+/**
+ * One row per condition. Radar opens a new alert each time a condition recurs,
+ * so the same summary on the same monitor can appear several times with
+ * different ids (four "Chainlink ETH/USD on Arbitrum differs..." rows, say).
+ * Keeps the first occurrence, so pass alerts newest first.
+ */
+export function uniqueAlertConditions<T extends Pick<PublicRadarAlert, "monitorType" | "provider" | "status" | "summary">>(
+  alerts: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const alert of alerts) {
+    const key = [alert.monitorType, alert.provider, alert.status, alert.summary]
+      .map((part) => part.trim().toLowerCase())
+      .join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(alert);
+  }
+  return unique;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMonitorCtaHref, toPublicRadarAlert } from "./public-alerts";
+import { buildMonitorCtaHref, toPublicRadarAlert, uniqueAlertConditions } from "./public-alerts";
 
 describe("toPublicRadarAlert", () => {
   it("keeps only public-safe alert fields", () => {
@@ -113,5 +113,30 @@ describe("buildMonitorCtaHref", () => {
 
   it("builds a direct watchlist CTA for authenticated users", () => {
     expect(buildMonitorCtaHref(true, "obj_1")).toBe("/dashboard/watchlists?objectId=obj_1");
+  });
+});
+
+describe("uniqueAlertConditions", () => {
+  const row = (id: string, summary: string, status = "resolved") => ({
+    id,
+    monitorType: "oracle_reference",
+    provider: "oracle",
+    status,
+    summary,
+  });
+
+  it("keeps the newest alert for each repeated condition", () => {
+    const rows = [
+      row("a", "Chainlink ETH/USD on Arbitrum differs from CoinMarketCap ETH/USD."),
+      row("b", "Chainlink ETH/USD on Base differs from CoinMarketCap ETH/USD."),
+      row("c", "Chainlink ETH/USD on Arbitrum differs from CoinMarketCap ETH/USD."),
+      row("d", "chainlink eth/usd on arbitrum differs from coinmarketcap eth/usd. "),
+    ];
+    expect(uniqueAlertConditions(rows).map((r) => r.id)).toEqual(["a", "b"]);
+  });
+
+  it("treats an open and a resolved alert for the same condition as different rows", () => {
+    const rows = [row("a", "Feed stale.", "open"), row("b", "Feed stale.", "resolved")];
+    expect(uniqueAlertConditions(rows).map((r) => r.id)).toEqual(["a", "b"]);
   });
 });

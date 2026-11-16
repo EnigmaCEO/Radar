@@ -10,7 +10,7 @@ import {
   isResolvedAlertStatus,
   isSupersededAlertStatus,
 } from "@/lib/alert-status";
-import { toPublicRadarAlert, type PublicRadarAlert } from "@/lib/public-alerts";
+import { toPublicRadarAlert, uniqueAlertConditions, type PublicRadarAlert } from "@/lib/public-alerts";
 import {
   ALERT_EMPTY_HEADLINE,
   ALERT_UNAVAILABLE_HEADLINE,
@@ -162,6 +162,9 @@ interface LandingFeedItem {
 }
 
 const LANDING_ALERT_LIMIT = 12;
+// Read a wider window than is shown, so the feed still fills after repeated
+// conditions collapse to one row each.
+const LANDING_ALERT_READ_LIMIT = 60;
 
 function toLandingFeedSeverity(severity: string): LandingFeedSeverity {
   if (severity === "critical") return "critical";
@@ -243,12 +246,11 @@ function landingFeedFromResult(
     ];
   }
 
-  const stalePrefix = result.state === "degraded" ? "Last confirmed: " : "";
   return result.alerts.map((alert) => ({
     id: alert.id,
     href: `/alerts/${alert.id}`,
     sev: toLandingFeedSeverity(alert.severity),
-    msg: `${stalePrefix}${formatLandingAlertMessage(alert)}`,
+    msg: formatLandingAlertMessage(alert),
     src: formatLandingAlertSource(alert),
     age: formatLandingAlertAge(alert.updatedAt),
   }));
@@ -258,13 +260,14 @@ async function loadLandingFeed(): Promise<AlertCollectionResult<PublicRadarAlert
   // After the first confirmed read, served from the stored snapshot while a
   // refresh runs in the background, so the hero no longer waits on SCE or
   // shows a false outage when a refresh fails.
-  const collection = await fetchLandingAlertCollection(LANDING_ALERT_LIMIT);
+  const collection = await fetchLandingAlertCollection(LANDING_ALERT_READ_LIMIT);
 
   return mapAlertCollection(collection, (alerts) =>
-    alerts
-      .map(toPublicRadarAlert)
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, LANDING_ALERT_LIMIT),
+    uniqueAlertConditions(
+      alerts
+        .map(toPublicRadarAlert)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+    ).slice(0, LANDING_ALERT_LIMIT),
   );
 }
 
@@ -273,8 +276,10 @@ export default async function LandingPage() {
     getMonitoredValueUsd(),
     loadLandingFeed(),
   ]);
-  const monitoredUsd = formatUsd(monitoredUsdValue);
+  const monitoredUsd = monitoredUsdValue === null ? null : formatUsd(monitoredUsdValue);
   const feedItems = landingFeedFromResult(feedResult);
+  // A snapshot past its freshness window is labelled once, on the strip, rather than on every row.
+  const feedLabel = feedResult.state === "degraded" ? "Last confirmed alerts" : "Latest alerts";
   return (
     <div className="flex min-h-screen flex-col">
       <Nav />
@@ -443,10 +448,15 @@ export default async function LandingPage() {
               Radar watches the infrastructure your protocol depends on and delivers actionable alerts to Discord, Telegram, or webhook before issues become user-facing.
             </p>
 
-            <div className="mt-10 flex flex-col items-center gap-1">
-              <span className="text-6xl font-bold tracking-tight text-amber-400 md:text-7xl">{monitoredUsd}</span>
-              <span className="text-sm font-medium uppercase tracking-widest text-slate-500">DeFi infrastructure monitored</span>
-            </div>
+            {monitoredUsd ? (
+              <div className="mt-10 flex flex-col items-center gap-1">
+                <span className="text-6xl font-bold tracking-tight text-amber-400 md:text-7xl">{monitoredUsd}</span>
+                <span className="text-sm font-medium uppercase tracking-widest text-slate-500">DeFi TVL covered</span>
+                <span className="mt-1 max-w-md text-xs text-slate-500">
+                  Live value locked in protocols that depend on the oracle feeds and liquidity pools Radar monitors.
+                </span>
+              </div>
+            ) : null}
 
             <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white" asChild>
@@ -492,7 +502,7 @@ export default async function LandingPage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
               </span>
-              <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-widest text-slate-500">Latest alerts</span>
+              <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-widest text-slate-500">{feedLabel}</span>
             </div>
             <div className="h-full w-12 bg-gradient-to-r from-[#07060f] to-transparent" />
           </div>
@@ -503,9 +513,15 @@ export default async function LandingPage() {
           {/* Scrolling track */}
           <div className="marquee-track py-2.5 pl-52">
             {[...feedItems, ...feedItems].map((alert, index) => (
-              <span key={`${alert.id}-${index}`} className="inline-flex whitespace-nowrap px-7">
+              // The list is rendered twice so the marquee loops seamlessly; the copy is hidden from assistive tech.
+              <span
+                key={`${alert.id}-${index}`}
+                className="inline-flex whitespace-nowrap px-7"
+                aria-hidden={index >= feedItems.length ? true : undefined}
+              >
                 <Link
                   href={alert.href}
+                  tabIndex={index >= feedItems.length ? -1 : undefined}
                   className="flex items-center gap-2 transition-colors hover:text-white"
                   title={alert.msg}
                 >
