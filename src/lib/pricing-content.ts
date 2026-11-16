@@ -20,7 +20,7 @@ export const PRICING_PLAN_CONTENT: PricingPlanContent[] = [
     description: "Personal monitoring for focused infrastructure exposure.",
     features: [
       { text: "One asset lens or up to 5 exact objects" },
-      { text: "Email, Telegram & Discord alerts" },
+      { text: "Discord or Telegram digests to one destination" },
       { text: "30-day event history" },
       { text: "Public receipt links" },
     ],
@@ -50,7 +50,7 @@ export const PRICING_PLAN_CONTENT: PricingPlanContent[] = [
         text: "Correlation & exposure groups",
         detail: "Know when related parts of your position break together.",
       },
-      { text: "Push and webhook delivery" },
+      { text: "Real-time alerts to Discord, Telegram & webhook" },
       { text: "90-day private history" },
       { text: "Operational alert briefings" },
     ],

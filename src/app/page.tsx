@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { AlertTriangle, ArrowRight, Bell, Check, Globe, Shield, Zap, Activity } from "lucide-react";
 import { Nav } from "@/components/nav";
+import { AfterMount } from "@/components/after-mount";
 import { Footer } from "@/components/footer";
 import { getMonitoredValueUsd, formatUsd } from "@/lib/radar-stats";
 import { PRICING_PLAN_CONTENT, splitPlanPrice } from "@/lib/pricing-content";
@@ -31,7 +32,7 @@ function buildSignupHref(plan?: "watch" | "radar_intel" | "radar_signal") {
     screen_hint: "signup",
     returnTo,
   });
-  return `/login?${params.toString()}`;
+  return `/auth/login?${params.toString()}`;
 }
 
 const DISCORD_INVITE_URL = "https://discord.gg/FPFabKwyW";
@@ -268,6 +269,26 @@ async function loadLandingFeed(): Promise<AlertCollectionResult<PublicRadarAlert
         .map(toPublicRadarAlert)
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     ).slice(0, LANDING_ALERT_LIMIT),
+  );
+}
+
+function LandingFeedRow({ alert, loopCopy = false }: { alert: LandingFeedItem; loopCopy?: boolean }) {
+  return (
+    <span className="inline-flex whitespace-nowrap px-7" aria-hidden={loopCopy || undefined}>
+      <Link
+        href={alert.href}
+        tabIndex={loopCopy ? -1 : undefined}
+        className="flex items-center gap-2 transition-colors hover:text-white"
+        title={alert.msg}
+      >
+        <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${SEV_COLOR[alert.sev]}`} />
+        <span className={`text-xs font-medium ${SEV_TEXT[alert.sev]}`}>{alert.msg}</span>
+        <span className="text-slate-700">·</span>
+        <span className="font-mono text-[10px] uppercase tracking-wide text-slate-600">{alert.src}</span>
+        <span className="text-slate-700">·</span>
+        <span className="text-[10px] text-slate-600">{alert.age}</span>
+      </Link>
+    </span>
   );
 }
 
@@ -512,28 +533,17 @@ export default async function LandingPage() {
 
           {/* Scrolling track */}
           <div className="marquee-track py-2.5 pl-52">
-            {[...feedItems, ...feedItems].map((alert, index) => (
-              // The list is rendered twice so the marquee loops seamlessly; the copy is hidden from assistive tech.
-              <span
-                key={`${alert.id}-${index}`}
-                className="inline-flex whitespace-nowrap px-7"
-                aria-hidden={index >= feedItems.length ? true : undefined}
-              >
-                <Link
-                  href={alert.href}
-                  tabIndex={index >= feedItems.length ? -1 : undefined}
-                  className="flex items-center gap-2 transition-colors hover:text-white"
-                  title={alert.msg}
-                >
-                  <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${SEV_COLOR[alert.sev]}`} />
-                  <span className={`text-xs font-medium ${SEV_TEXT[alert.sev]}`}>{alert.msg}</span>
-                  <span className="text-slate-700">·</span>
-                  <span className="font-mono text-[10px] uppercase tracking-wide text-slate-600">{alert.src}</span>
-                  <span className="text-slate-700">·</span>
-                  <span className="text-[10px] text-slate-600">{alert.age}</span>
-                </Link>
-              </span>
+            {feedItems.map((alert) => (
+              <LandingFeedRow key={alert.id} alert={alert} />
             ))}
+            {/* The marquee scrolls by half its width, so it needs the list twice to
+                loop seamlessly. The copy is added in the browser only, hidden from
+                assistive tech, so the server HTML lists each alert once. */}
+            <AfterMount>
+              {feedItems.map((alert) => (
+                <LandingFeedRow key={`${alert.id}-loop`} alert={alert} loopCopy />
+              ))}
+            </AfterMount>
           </div>
         </div>
       </section>
